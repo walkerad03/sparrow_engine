@@ -12,11 +12,11 @@ layout (location = 1) out vec4 out_normal;
 layout (location = 2) out float out_occlusion;
 
 void main() {
-    // For now, just output a flat color square (Placeholder for texture)
-    // In the future: vec4 tex = texture(u_texture, v_uv);
+    // We must use v_uv on windows to keep the compiler from dropping it.
+    vec2 dummy = v_uv * 0.00001;
     
     // Target 0: Albedo (Color)
-    out_albedo = u_color;
+    out_albedo = u_color + vec4(dummy, 0.0, 0.0);
     
     // Target 1: Normal Map (Flat "Up" vector 0,0,1 for 2D)
     out_normal = vec4(0.5, 0.5, 1.0, 1.0);

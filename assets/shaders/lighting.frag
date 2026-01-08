@@ -17,6 +17,8 @@ uniform vec3 u_ambient;
 out vec4 f_color;
 
 void main() {
+    vec2 dummy = v_uv * 0.00001;
+
     // 1. Read G-Buffer
     vec4 albedo = texture(u_albedo, v_uv);
     vec3 normal = texture(u_normal, v_uv).rgb;
@@ -30,7 +32,7 @@ void main() {
     
     // Placeholder: Just output the Albedo * Ambient for now 
     // to prove the G-Buffer works.
-    vec3 final_color = albedo.rgb * u_ambient;
+    vec3 final_color = albedo.rgb * (u_ambient + vec3(dummy.x, dummy.y, 0.0));
     
     // Basic Additive Light (Very rough approximation for testing)
     final_color += albedo.rgb * u_light_color * u_intensity * 0.1;

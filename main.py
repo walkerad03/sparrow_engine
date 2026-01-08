@@ -1,5 +1,6 @@
-import argparse
+import ctypes
 import sys
+import argparse
 from pathlib import Path
 
 import pygame
@@ -22,9 +23,14 @@ def main():
     args = parser.parse_args()
 
     ctx = GraphicsContext(LOGICAL_RESOLUTION, WINDOW_SCALE)
-
     asset_path = Path(__file__).parent / "assets" / "shaders"
     renderer = Renderer(ctx, asset_path)
+
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except AttributeError:
+            pass
 
     world = World()
 
