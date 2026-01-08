@@ -62,7 +62,7 @@ def main():
 
     input_handler.push_context(base_ctx)
 
-    scene = DungeonScene(world, renderer)
+    scene = DungeonScene(world, renderer, host)
     scene.enter()
 
     clock = pygame.time.Clock()

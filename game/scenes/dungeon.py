@@ -1,3 +1,7 @@
+from sparrow.types import Address
+from typing import Dict
+from sparrow.net.host import Host
+from typing import Optional
 import math
 
 from sparrow.core.components import BoxCollider, Sprite, Transform
@@ -14,12 +18,16 @@ from ..entities.player import create_player
 
 
 class DungeonScene:
-    def __init__(self, world: World, renderer: Renderer):
+    def __init__(self, world: World, renderer: Renderer, host: Optional[Host] = None):
         self.world = world
         self.renderer = renderer
-        self.player_id: EntityId = EntityId(0)
+        self.host = host
 
         self.grid = Grid(GRID_WIDTH, GRID_HEIGHT, TILE_SIZE)
+
+        self.local_player_id: EntityId
+
+        self.network_players: Dict[Address, EntityId] = {}
 
     def enter(self):
         """Called when the scene starts."""
@@ -44,22 +52,54 @@ class DungeonScene:
         # 3. Spawn Player
         # Start in middle of room
         cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
-        self.player_id = create_player(self.world, cx, cy)
+        self.local_player_id = create_player(self.world, cx, cy)
 
     def update(self, dt: float):
         """Game Logic (Movement, Spells, Physics)."""
         inp = self.world.get_resource(InputHandler)
+        self._update_entity_from_input(
+            self.local_player_id,
+            inp.get_axis("LEFT", "RIGHT"),
+            inp.get_axis("DOWN", "UP"),
+            dt,
+        )
 
-        dx = inp.get_axis("LEFT", "RIGHT")
-        dy = inp.get_axis("DOWN", "UP")
+        if self.host:
+            for addr in self.host.clients:
+                if addr not in self.network_players:
+                    print(f"[GAME] Spawning new player for {addr}")
+                    cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                    new_eid = create_player(self.world, cx + 20, cy + 20)
+                    self.network_players[addr] = new_eid
+
+            for addr, eid in self.network_players.items():
+                input_data = self.host.get_input_for(addr)
+                self._update_entity_from_input(eid, input_data[0], input_data[1], dt)
+
+        if self.local_player_id:
+            trans = self.world.component(self.local_player_id, Transform)
+            if trans:
+                self.renderer.camera.look_at(trans.x, trans.y)
+                self.renderer.camera.update(dt)
+
+    def _update_entity_from_input(
+        self,
+        eid: EntityId,
+        dx: float,
+        dy: float,
+        dt: float,
+    ) -> None:
+        """Shared movement logic for Local and Network entities."""
+        if not eid:
+            return
 
         if dx != 0 or dy != 0:
             length = math.sqrt(dx * dx + dy * dy)
             dx /= length
             dy /= length
 
-        trans = self.world.component(self.player_id, Transform)
-        collider = self.world.component(self.player_id, BoxCollider)
+        trans = self.world.component(eid, Transform)
+        collider = self.world.component(eid, BoxCollider)
 
         if not trans or not collider:
             return
@@ -74,10 +114,7 @@ class DungeonScene:
         if not self._check_collision(trans.x, next_y, collider):
             trans = Transform(x=trans.x, y=next_y, scale=trans.scale)
 
-        self.world.mutate_component(self.player_id, trans)
-
-        self.renderer.camera.look_at(trans.x, trans.y)
-        self.renderer.camera.update(dt)
+        self.world.mutate_component(eid, trans)
 
     def _check_collision(
         self, new_x: float, new_y: float, collider: BoxCollider

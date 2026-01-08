@@ -1,3 +1,4 @@
+from sparrow.core.components import Sprite
 from sparrow.core.components import Transform
 from sparrow.core.world import World
 from sparrow.net.serializer import PACKET_SNAPSHOT, Serializer
@@ -35,14 +36,20 @@ class Client:
                     eid_raw, new_trans = Serializer.deserialize_snapshot(data)
                     eid = EntityId(eid_raw)
 
-                    # If entity exists, snap it to the new position
-                    # (In the future, we would LERP here for smoothness)
+                    # TODO: Lerp for extra smoothness in case of dropped frames
                     if world.has(eid, Transform):
                         world.mutate_component(eid, new_trans)
                     else:
-                        # Logic to spawn unknown entities would go here
-                        # For MVP, we assume entities are pre-spawned or spawned via RPC
-                        pass
+                        print(f"[NET] Spawning Ghost for Entity {eid}")
+                        world.add_component(eid, new_trans)
+                        world.add_component(
+                            eid,
+                            Sprite(
+                                texture_id="ghost",
+                                color=(0.5, 0.5, 1.0, 1.0),
+                                layer=2,
+                            ),
+                        )
 
                 except Exception as e:
                     print(f"[NET] Bad Snapshot: {e}")
