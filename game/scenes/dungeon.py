@@ -1,47 +1,46 @@
-from sparrow.types import Address
-from typing import Dict
-from sparrow.net.host import Host
-from typing import Optional
 import math
+from typing import Dict, Optional
 
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
 from sparrow.graphics.light import AmbientLight
 from sparrow.graphics.renderer import Renderer
 from sparrow.input.handler import InputHandler
+from sparrow.net.client import Client
+from sparrow.net.host import Host
 from sparrow.spatial.collision import aabb_vs_aabb, get_world_bounds
 from sparrow.spatial.grid import Grid
-from sparrow.types import EntityId
+from sparrow.types import Address, EntityId
 
-from ..constants import GRID_HEIGHT, GRID_WIDTH, TILE_SIZE
-from ..entities.player import create_player
+from game.constants import GRID_HEIGHT, GRID_WIDTH, TILE_SIZE
+from game.entities.player import create_player
 
 
 class DungeonScene:
-    def __init__(self, world: World, renderer: Renderer, host: Optional[Host] = None):
+    def __init__(
+        self,
+        world: World,
+        renderer: Renderer,
+        host: Optional[Host] = None,
+        client: Optional[Client] = None,
+    ):
         self.world = world
         self.renderer = renderer
         self.host = host
-
+        self.client = client
         self.grid = Grid(GRID_WIDTH, GRID_HEIGHT, TILE_SIZE)
 
-        self.local_player_id: EntityId
+        self.local_player_id: Optional[EntityId] = None
 
         self.network_players: Dict[Address, EntityId] = {}
 
-    def enter(self):
-        """Called when the scene starts."""
-        # 1. Setup Environment
-        self.world.create_entity(AmbientLight(color=(0.2, 0.2, 0.4)))
-
-        # 2. Generate box level
+    def _build_level(self) -> None:
         for x in range(GRID_WIDTH):
             for y in range(GRID_HEIGHT):
                 # Draw borders
                 if x == 0 or x == GRID_WIDTH - 1 or y == 0 or y == GRID_HEIGHT - 1:
                     self.grid.set(x, y, 1)
 
-                    # Visual representation of the wall
                     wx, wy = self.grid.grid_to_world(x, y)
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
@@ -49,29 +48,68 @@ class DungeonScene:
                         BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
                     )
 
-        # 3. Spawn Player
-        # Start in middle of room
+    def enter(self):
+        """Called when the scene starts."""
+        self.world.create_entity(AmbientLight(color=(0.2, 0.2, 0.4)))
+        self._build_level()
+
         cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
-        self.local_player_id = create_player(self.world, cx, cy)
+
+        if self.host:
+            self.local_player_id = create_player(self.world, cx, cy)
+        elif self.client:
+            pass  # Wait for welcome
+
+        else:
+            self.local_player_id = create_player(self.world, cx, cy)
 
     def update(self, dt: float):
-        """Game Logic (Movement, Spells, Physics)."""
-        inp = self.world.get_resource(InputHandler)
-        self._update_entity_from_input(
-            self.local_player_id,
-            inp.get_axis("LEFT", "RIGHT"),
-            inp.get_axis("DOWN", "UP"),
-            dt,
-        )
+        """Game Logic."""
+        if self.client and self.local_player_id is None:
+            if self.client.my_entity_id is not None:
+                self.local_player_id = self.client.my_entity_id
+
+                if self.world.has(self.local_player_id, Sprite):
+                    current_sprite = self.world.component(self.local_player_id, Sprite)
+                    self.world.mutate_component(
+                        self.local_player_id,
+                        Sprite(
+                            texture_id=current_sprite.texture_id,
+                            color=(1.0, 0.2, 0.2, 1.0),  # RED
+                            layer=current_sprite.layer,
+                        ),
+                    )
 
         if self.host:
             for addr in self.host.clients:
                 if addr not in self.network_players:
                     print(f"[GAME] Spawning new player for {addr}")
+
                     cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
                     new_eid = create_player(self.world, cx + 20, cy + 20)
                     self.network_players[addr] = new_eid
 
+                    self.world.mutate_component(
+                        new_eid,
+                        Sprite(
+                            texture_id="wizard_robe",
+                            color=(0.5, 0.5, 1.0, 1.0),  # BLUE
+                            layer=2,
+                        ),
+                    )
+
+                    self.host.send_welcome(addr, int(new_eid))
+
+        if self.local_player_id:
+            inp = self.world.get_resource(InputHandler)
+            self._update_entity_from_input(
+                self.local_player_id,
+                inp.get_axis("LEFT", "RIGHT"),
+                inp.get_axis("DOWN", "UP"),
+                dt,
+            )
+
+        if self.host:
             for addr, eid in self.network_players.items():
                 input_data = self.host.get_input_for(addr)
                 self._update_entity_from_input(eid, input_data[0], input_data[1], dt)

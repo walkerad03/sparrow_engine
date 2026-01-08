@@ -15,6 +15,11 @@ class Host:
         # (We store inputs to apply them every frame until new ones arrive)
         self.client_inputs: Dict[Address, Tuple[float, float, int]] = {}
 
+    def send_welcome(self, addr: Address, eid: int):
+        """Tells a specific client which Entity ID they control."""
+        packet = Serializer.serialize_welcome(eid)
+        self.transport.send(packet, addr)
+
     def process_network(self):
         """
         1. Receive packets.

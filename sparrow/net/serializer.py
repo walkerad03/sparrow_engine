@@ -6,6 +6,7 @@ from sparrow.types import EntityId
 
 PACKET_SNAPSHOT = 1
 PACKET_INPUT = 2
+PACKET_WELCOME = 3
 
 
 class Serializer:
@@ -16,6 +17,7 @@ class Serializer:
 
     _transform_struct = struct.Struct("!ffff")
     _input_struct = struct.Struct("!ffI")
+    _welcome_struct = struct.Struct("!BI")
 
     @classmethod
     def serialize_transform(cls, eid: int, t: Transform) -> bytes:
@@ -51,3 +53,12 @@ class Serializer:
     def deserialize_input(cls, data: bytes) -> Tuple[float, float, int]:
         # Skip 1 byte header
         return cls._input_struct.unpack(data[1:13])
+
+    @classmethod
+    def serialize_welcome(cls, eid: int) -> bytes:
+        return cls._welcome_struct.pack(PACKET_WELCOME, eid)
+
+    @classmethod
+    def deserialize_welcome(cls, data: bytes) -> int:
+        # Returns the EntityId assigned to this client
+        return cls._welcome_struct.unpack(data)[1]

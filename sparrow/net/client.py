@@ -1,7 +1,8 @@
-from sparrow.core.components import Sprite
-from sparrow.core.components import Transform
+from typing import Optional
+
+from sparrow.core.components import Sprite, Transform
 from sparrow.core.world import World
-from sparrow.net.serializer import PACKET_SNAPSHOT, Serializer
+from sparrow.net.serializer import PACKET_SNAPSHOT, Serializer, PACKET_WELCOME
 from sparrow.net.transport import Address, Transport
 from sparrow.types import EntityId
 
@@ -11,6 +12,7 @@ class Client:
         self.transport = Transport(port=0)  # 0 = Random port
         self.server_addr: Address = (server_ip, server_port)
         self.connected = False
+        self.my_entity_id: Optional[EntityId] = None
 
     def send_input(self, axis_x: float, axis_y: float, actions_mask: int):
         """
@@ -41,15 +43,19 @@ class Client:
                         world.mutate_component(eid, new_trans)
                     else:
                         print(f"[NET] Spawning Ghost for Entity {eid}")
-                        world.add_component(eid, new_trans)
-                        world.add_component(
+                        world.add_entity(
                             eid,
+                            new_trans,
                             Sprite(
-                                texture_id="ghost",
+                                texture_id="wizard_robe",
                                 color=(0.5, 0.5, 1.0, 1.0),
                                 layer=2,
                             ),
                         )
-
                 except Exception as e:
                     print(f"[NET] Bad Snapshot: {e}")
+
+            elif packet_type == PACKET_WELCOME:
+                eid = Serializer.deserialize_welcome(data)
+                self.my_entity_id = EntityId(eid)
+                print(f"[NET] Server assigned us Entity ID: {eid}")

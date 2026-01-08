@@ -60,17 +60,17 @@ class World:
         """Retrieves a resource or returns None."""
         return self._resource_manager.try_get(resource_type)
 
-    def mutate_resource(self, resource: Any) -> None:
+    def mutate_resource(self, resource_type: Type[T]) -> None:
         """Updates an EXISTING resource with a new instance."""
-        res_type = type(resource)
+        res_type = type(resource_type)
 
-        if self._resource_manager.try_get(res_type) is None:
+        if self._resource_manager.try_get(resource_type) is None:
             raise KeyError(
                 f"Resource {res_type.__name__} does not exist. "
                 "Use world.add_resource() to initialize global state."
             )
 
-        self._resource_manager.add(resource)
+        self._resource_manager.add(resource_type)
 
     # EVENT MANAGEMENT
     def emit_event(self, event: Any) -> None:
@@ -96,6 +96,26 @@ class World:
             self.add_component(eid, c)
 
         return eid
+
+    def add_entity(self, eid: EntityId, *components: Any) -> None:
+        """
+        Manually spawns an entity with a specific ID.
+        Useful for networking (replicating server IDs) or loading saves.
+        """
+        if eid >= self._next_id:
+            self._next_id = eid + 1
+
+        if eid in self._entities:
+            for c in components:
+                self.add_component(eid, c)
+            return
+
+        arch = self._archetypes[ArchetypeMask(0)]
+        row = arch.add(eid, {})
+        self._entities[eid] = EntityRecord(arch, row)
+
+        for c in components:
+            self.add_component(eid, c)
 
     def delete_entity(self, eid: EntityId) -> None:
         if eid not in self._entities:
