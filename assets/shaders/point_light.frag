@@ -32,7 +32,7 @@ void main() {
     
     // Quality Settings
     // Higher steps = cleaner shadows but slower
-    int steps = 64; 
+    int steps = 128; 
     float step_size = max_dist / float(steps);
 
     vec2 ray_pos = v_pos;

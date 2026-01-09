@@ -66,13 +66,13 @@ class DungeonScene:
                 if tile_id == TILE_FLOOR:
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
-                        Sprite("floor_1", color=(1.0, 1.0, 1.0, 1.0)),  # Grey
+                        Sprite("floor_1", color=(1.0, 1.0, 1.0, 1.0), layer=0),  # Grey
                     )
 
                 elif tile_id == TILE_WALL:
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
-                        Sprite("wall_mid", color=(1.0, 1.0, 1.0, 1.0)),  # Grey
+                        Sprite("wall_mid", color=(1.0, 1.0, 1.0, 1.0), layer=1),  # Grey
                         BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
                         BlocksLight(),
                     )
@@ -80,7 +80,9 @@ class DungeonScene:
                 elif tile_id == TILE_GOLD:
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
-                        Sprite("wall_mid", color=(1.0, 0.8, 0.0, 1.0)),  # Gold Tint
+                        Sprite(
+                            "wall_mid", color=(1.0, 0.8, 0.0, 1.0), layer=1
+                        ),  # Gold Tint
                         BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
                         BlocksLight(),
                     )
@@ -89,7 +91,7 @@ class DungeonScene:
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
                         # Water might be transparent or have a different layer
-                        Sprite("water", color=(0.0, 0.0, 1.0, 0.5), layer=0),
+                        Sprite("water", color=(0.0, 0.0, 1.0, 0.5), layer=1),
                         # No Collider? or Trigger Collider?
                     )
 

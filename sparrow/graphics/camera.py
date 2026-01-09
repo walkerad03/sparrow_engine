@@ -8,7 +8,7 @@ class Camera:
         self.position = np.array([0.0, 0.0], dtype="f4")
         self.target = np.array([0.0, 0.0], dtype="f4")
 
-        self.smoothing: float = 5.0
+        self.smoothing: float = 7.5
 
         self.zoom = 1.0
         self.width, self.height = resolution
@@ -32,7 +32,7 @@ class Camera:
         dy = self.target[1] - self.position[1]
 
         # If we are effectively there, stop updating to save matrix math
-        if abs(dx) < 0.1 and abs(dy) < 0.1:
+        if abs(dx) < 1 and abs(dy) < 1:
             return
 
         # Apply smoothing

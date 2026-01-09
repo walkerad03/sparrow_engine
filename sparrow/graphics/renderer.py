@@ -140,8 +140,8 @@ class Renderer:
 
             # Quad Size Optimization
             self._set(self.light_prog, "u_pos", (trans.x, trans.y))
-            diameter = light.radius * 2.0
-            self._set(self.light_prog, "u_size", (diameter, diameter))
+            size = light.radius * 2.2
+            self._set(self.light_prog, "u_size", (size, size))
 
             # Draw
             self.light_vao.render(mode=moderngl.TRIANGLE_STRIP)
