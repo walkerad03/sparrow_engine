@@ -1,6 +1,16 @@
+from game.spatial.generator import (
+    generate_dungeon,
+    TILE_WALL,
+    TILE_GOLD,
+    TILE_WATER,
+    TILE_FLOOR,
+    find_spawn_point,
+)
 import math
-from typing import Dict, Optional
+from typing import Optional
 
+from game.constants import GRID_HEIGHT, GRID_WIDTH, TILE_SIZE
+from game.entities.player import create_player
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
 from sparrow.graphics.light import AmbientLight
@@ -10,10 +20,7 @@ from sparrow.net.client import Client
 from sparrow.net.host import Host
 from sparrow.spatial.collision import aabb_vs_aabb, get_world_bounds
 from sparrow.spatial.grid import Grid
-from sparrow.types import Address, EntityId
-
-from game.constants import GRID_HEIGHT, GRID_WIDTH, TILE_SIZE
-from game.entities.player import create_player
+from sparrow.types import EntityId
 
 
 class DungeonScene:
@@ -30,97 +37,143 @@ class DungeonScene:
         self.client = client
         self.grid = Grid(GRID_WIDTH, GRID_HEIGHT, TILE_SIZE)
 
-        self.local_player_id: Optional[EntityId] = None
-
-        self.network_players: Dict[Address, EntityId] = {}
-
-    def _build_level(self) -> None:
-        for x in range(GRID_WIDTH):
-            for y in range(GRID_HEIGHT):
-                # Draw borders
-                if x == 0 or x == GRID_WIDTH - 1 or y == 0 or y == GRID_HEIGHT - 1:
-                    self.grid.set(x, y, 1)
-
-                    wx, wy = self.grid.grid_to_world(x, y)
-                    self.world.create_entity(
-                        Transform(x=wx, y=wy),
-                        Sprite(texture_id="wall", color=(0.4, 0.4, 0.5, 1.0)),
-                        BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
-                    )
+        self.local_pid: Optional[EntityId] = None
 
     def enter(self):
         """Called when the scene starts."""
         self.world.create_entity(AmbientLight(color=(0.2, 0.2, 0.4)))
-        self._build_level()
-
-        cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
 
         if self.host:
-            self.local_player_id = create_player(self.world, cx, cy)
-        elif self.client:
-            pass  # Wait for welcome
+            print("[GAME] Generating Dungeon...")
+            self.grid = generate_dungeon(GRID_WIDTH, GRID_HEIGHT)
+            self._spawn_map_visuals()
 
-        else:
-            self.local_player_id = create_player(self.world, cx, cy)
+            gx, gy = find_spawn_point(self.grid)
+            wx, wy = self.grid.grid_to_world(gx, gy)
+
+            self.local_pid = create_player(self.world, wx, wy)
+            print(f"[GAME] Host spawned at Grid({gx}, {gy})")
+        elif self.client:
+            print("[GAME] Waiting for Map Data...")
+
+    def _spawn_map_visuals(self):
+        for x in range(self.grid.width):
+            for y in range(self.grid.height):
+                tile_id = self.grid.get(x, y)
+
+                wx, wy = self.grid.grid_to_world(x, y)
+
+                if tile_id == TILE_FLOOR:
+                    self.world.create_entity(
+                        Transform(x=wx, y=wy),
+                        Sprite("floor_1", color=(1.0, 1.0, 1.0, 1.0)),  # Grey
+                    )
+
+                elif tile_id == TILE_WALL:
+                    self.world.create_entity(
+                        Transform(x=wx, y=wy),
+                        Sprite("wall_mid", color=(1.0, 1.0, 1.0, 1.0)),  # Grey
+                        BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
+                    )
+
+                elif tile_id == TILE_GOLD:
+                    self.world.create_entity(
+                        Transform(x=wx, y=wy),
+                        Sprite("wall_gold", color=(1.0, 0.8, 0.0, 1.0)),  # Gold Tint
+                        BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
+                    )
+
+                elif tile_id == TILE_WATER:
+                    self.world.create_entity(
+                        Transform(x=wx, y=wy),
+                        # Water might be transparent or have a different layer
+                        Sprite("water", color=(0.0, 0.0, 1.0, 0.5), layer=0),
+                        # No Collider? or Trigger Collider?
+                    )
 
     def update(self, dt: float):
         """Game Logic."""
-        if self.client and self.local_player_id is None:
-            if self.client.my_entity_id is not None:
-                self.local_player_id = self.client.my_entity_id
+        if self.client:
+            self.client.update(self.world)
 
-                if self.world.has(self.local_player_id, Sprite):
-                    current_sprite = self.world.component(self.local_player_id, Sprite)
-                    self.world.mutate_component(
-                        self.local_player_id,
-                        Sprite(
-                            texture_id=current_sprite.texture_id,
-                            color=(1.0, 0.2, 0.2, 1.0),  # RED
-                            layer=current_sprite.layer,
-                        ),
-                    )
+            if self.local_pid is None and self.client.my_entity_id is not None:
+                self.local_pid = self.client.my_entity_id
 
-        if self.host:
-            for addr in self.host.clients:
-                if addr not in self.network_players:
-                    print(f"[GAME] Spawning new player for {addr}")
-
-                    cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                    new_eid = create_player(self.world, cx + 20, cy + 20)
-                    self.network_players[addr] = new_eid
-
-                    self.world.mutate_component(
-                        new_eid,
-                        Sprite(
-                            texture_id="wizard_robe",
-                            color=(0.5, 0.5, 1.0, 1.0),  # BLUE
-                            layer=2,
-                        ),
-                    )
-
-                    self.host.send_welcome(addr, int(new_eid))
-
-        if self.local_player_id:
             inp = self.world.get_resource(InputHandler)
-            self._update_entity_from_input(
-                self.local_player_id,
-                inp.get_axis("LEFT", "RIGHT"),
-                inp.get_axis("DOWN", "UP"),
-                dt,
-            )
+            ax = inp.get_axis("LEFT", "RIGHT")
+            ay = inp.get_axis("DOWN", "UP")
+            self.client.send_input(ax, ay, 0)
 
         if self.host:
-            for addr, eid in self.network_players.items():
-                input_data = self.host.get_input_for(addr)
-                self._update_entity_from_input(eid, input_data[0], input_data[1], dt)
+            self.host.update()
 
-        if self.local_player_id:
-            trans = self.world.component(self.local_player_id, Transform)
-            if trans:
-                self.renderer.camera.look_at(trans.x, trans.y)
+            for addr, eid in self.host.clients.items():
+                if eid == -1:  # Needs Spawn
+                    cx, cy = self.grid.grid_to_world(GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                    new_eid = create_player(
+                        self.world, cx + 40, cy + 40
+                    )  # Offset slightly
+
+                    self.host.assign_entity(addr, int(new_eid))
+
+            # Move Host (Local Input)
+            if self.local_pid:
+                inp = self.world.get_resource(InputHandler)
+                self._move_entity(
+                    self.local_pid,
+                    inp.get_axis("LEFT", "RIGHT"),
+                    inp.get_axis("DOWN", "UP"),
+                    dt,
+                )
+
+            # Move Clients (Network Input)
+            for addr, eid in self.host.clients.items():
+                if eid != -1:
+                    ax, ay, _ = self.host.get_input(addr)
+                    self._move_entity(EntityId(eid), ax, ay, dt)
+
+            # (In a real game, iterate all dynamic entities. For now, just players)
+            if self.local_pid:
+                t = self.world.component(self.local_pid, Transform)
+                self.host.broadcast_state(self.local_pid, t.x, t.y)
+
+            for _, eid in self.host.clients.items():
+                if eid != -1:
+                    t = self.world.component(EntityId(eid), Transform)
+                    if t:
+                        self.host.broadcast_state(eid, t.x, t.y)
+
+        if self.local_pid:
+            t = self.world.component(self.local_pid, Transform)
+            if t:
+                self.renderer.camera.look_at(t.x, t.y)
                 self.renderer.camera.update(dt)
 
-    def _update_entity_from_input(
+        if self.host:
+            for addr, eid in self.host.clients.items():
+                if eid == -1:  # Needs Spawn
+                    print(f"[GAME] Initializing Client {addr}")
+
+                    # 1. Send Map
+                    self.host.send_map(addr, self.grid)
+
+                    # 2. Find Safe Spawn
+                    gx, gy = find_spawn_point(self.grid)
+                    wx, wy = self.grid.grid_to_world(gx, gy)
+
+                    # 3. Create Entity
+                    new_eid = create_player(self.world, wx, wy)
+
+                    # Tint Blue to distinguish
+                    self.world.mutate_component(
+                        new_eid,
+                        Sprite("wizard_robe", color=(0.5, 0.5, 1.0, 1.0), layer=2),
+                    )
+
+                    # 4. Assign & Welcome
+                    self.host.assign_entity(addr, int(new_eid))
+
+    def _move_entity(
         self,
         eid: EntityId,
         dx: float,

@@ -1,8 +1,9 @@
+from game.entities.player import create_ghost
 from typing import Optional
 
-from sparrow.core.components import Sprite, Transform
+from sparrow.net.protocol import Protocol, PacketType
+from sparrow.core.components import Transform
 from sparrow.core.world import World
-from sparrow.net.serializer import PACKET_SNAPSHOT, Serializer, PACKET_WELCOME
 from sparrow.net.transport import Address, Transport
 from sparrow.types import EntityId
 
@@ -11,51 +12,51 @@ class Client:
     def __init__(self, server_ip: str, server_port: int):
         self.transport = Transport(port=0)  # 0 = Random port
         self.server_addr: Address = (server_ip, server_port)
-        self.connected = False
         self.my_entity_id: Optional[EntityId] = None
 
-    def send_input(self, axis_x: float, axis_y: float, actions_mask: int):
+        # Send initial handshake
+        print(f"[CLIENT] Connecting to {self.server_addr}...")
+        self.transport.send(Protocol.pack_connect(), self.server_addr)
+
+    def send_input(self, ax: float, ay: float, buttons: int):
         """
         Send current control state to Host.
         """
-        packet = Serializer.serialize_input(axis_x, axis_y, actions_mask)
+        packet = Protocol.pack_input(ax, ay, buttons)
         self.transport.send(packet, self.server_addr)
 
-    def update_world(self, world: World):
-        """
-        Process incoming snapshots and force-update local entities.
-        """
+    def update(self, world: World):
+        """Process incoming packets and update the World."""
         packets = self.transport.recv()
 
         for data, addr in packets:
             if addr != self.server_addr:
-                continue  # Ignore random packets
+                continue
 
-            packet_type = data[0]
+            ptype = Protocol.unpack_packet_type(data)
 
-            if packet_type == PACKET_SNAPSHOT:
-                try:
-                    eid_raw, new_trans = Serializer.deserialize_snapshot(data)
-                    eid = EntityId(eid_raw)
-
-                    # TODO: Lerp for extra smoothness in case of dropped frames
-                    if world.has(eid, Transform):
-                        world.mutate_component(eid, new_trans)
-                    else:
-                        print(f"[NET] Spawning Ghost for Entity {eid}")
-                        world.add_entity(
-                            eid,
-                            new_trans,
-                            Sprite(
-                                texture_id="wizard_robe",
-                                color=(0.5, 0.5, 1.0, 1.0),
-                                layer=2,
-                            ),
-                        )
-                except Exception as e:
-                    print(f"[NET] Bad Snapshot: {e}")
-
-            elif packet_type == PACKET_WELCOME:
-                eid = Serializer.deserialize_welcome(data)
+            if ptype == PacketType.WELCOME:
+                eid = Protocol.unpack_welcome(data)
                 self.my_entity_id = EntityId(eid)
-                print(f"[NET] Server assigned us Entity ID: {eid}")
+                print(f"[CLIENT] I am Entity {eid}!")
+
+            elif ptype == PacketType.STATE:
+                eid, x, y = Protocol.unpack_entity_state(data)
+                self._apply_state(world, EntityId(eid), x, y)
+                # print(f"[CLIENT] Received State [EID {eid}, pos: ({x:.2f},{y:.2f})]")
+
+    def _apply_state(self, world: World, eid: EntityId, x: float, y: float):
+        """Force the entity to the server's position."""
+        # Note: We need to cast int -> EntityId if using strict typing
+        # but for now we assume implicit conversion or lenient typing
+
+        if world.has(eid, Transform):
+            # Update existing
+            trans = world.component(eid, Transform)
+            # Simple Snap (Interpolation would go here)
+            new_trans = Transform(x=x, y=y, scale=trans.scale, rotation=trans.rotation)
+            world.mutate_component(eid, new_trans)
+        else:
+            # Spawn new "Ghost"
+            print(f"[CLIENT] Spawning Ghost {eid}")
+            create_ghost(world, eid, x, y)

@@ -1,3 +1,5 @@
+import pygame
+from pathlib import Path
 from typing import Any, cast
 
 import moderngl
@@ -12,8 +14,9 @@ from sparrow.graphics.shaders import ShaderManager
 
 
 class Renderer:
-    def __init__(self, ctx: GraphicsContext, asset_path):
+    def __init__(self, ctx: GraphicsContext, asset_path: Path):
         self.ctx = ctx
+        self.asset_path = asset_path
 
         self.gbuffer = GBuffer(ctx.ctx, ctx.logical_res)
         self.shaders = ShaderManager(ctx.ctx, asset_path)
@@ -37,6 +40,9 @@ class Renderer:
             self.post_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
         )
 
+        self.textures: dict[str, Any] = {}
+        self.get_texture("missing")
+
     def _set(self, prog: moderngl.Program, name: str, value: Any) -> None:
         """Safely sets a uniform value if it exists."""
         if name in prog:
@@ -49,13 +55,42 @@ class Renderer:
             # Cast to Uniform to satisfy linter that .write() exists
             cast(moderngl.Uniform, prog[name]).write(data)
 
+    def get_texture(self, name: str):
+        if name in self.textures:
+            return self.textures[name]
+
+        path = self.asset_path.parent / "textures" / f"{name}.png"
+
+        if not path.exists():
+            print(f"[WARN] Texture '{name}' not found. Trying 'missing.png'.")
+            path = self.asset_path.parent / "textures" / "missing.png"
+
+            if not path.exists():
+                print("[ERR] 'missing.png' not found! Generating fallback.")
+                tex = self.ctx.ctx.texture((1, 1), 4, data=b"\xff\x00\xff\xff")
+                tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+                self.textures[name] = tex
+                return tex
+
+        img = pygame.image.load(path).convert_alpha()
+        data = pygame.image.tobytes(img, "RGBA", True)
+        tex = self.ctx.ctx.texture(img.get_size(), 4, data=data)
+
+        tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        tex.swizzle = "RGBA"
+
+        self.textures[name] = tex
+        return tex
+
     def render(self, world: World):
         """
         Main Render Loop.
         """
+
         # 1. GEOMETRY PASS (Fill the G-Buffer)
         self.gbuffer.use()
         self.ctx.ctx.clear(0.0, 0.0, 0.0, 0.0)
+
         self.ctx.ctx.enable(moderngl.BLEND)
         self.ctx.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
         self.ctx.ctx.enable(moderngl.DEPTH_TEST)
@@ -63,7 +98,12 @@ class Renderer:
         # Global Uniforms
         self._write(self.sprite_prog, "u_matrix", self.camera.matrix)
 
-        for eid, sprite, trans in world.join(Sprite, Transform):
+        for _, sprite, trans in world.join(Sprite, Transform):
+            tex = self.get_texture(sprite.texture_id)
+            tex.use(location=0)
+
+            self._set(self.sprite_prog, "u_texture", 0)
+
             # Per-Instance Uniforms
             self._set(self.sprite_prog, "u_pos", (trans.x, trans.y))
 

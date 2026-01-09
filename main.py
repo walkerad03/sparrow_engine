@@ -1,6 +1,6 @@
+import argparse
 import ctypes
 import sys
-import argparse
 from pathlib import Path
 
 import pygame
@@ -22,15 +22,15 @@ def main():
     parser.add_argument("--join", type=str, help="Join a server (IP Address)")
     args = parser.parse_args()
 
-    ctx = GraphicsContext(LOGICAL_RESOLUTION, WINDOW_SCALE)
-    asset_path = Path(__file__).parent / "assets" / "shaders"
-    renderer = Renderer(ctx, asset_path)
-
     if sys.platform == "win32":
         try:
             ctypes.windll.user32.SetProcessDPIAware()
         except AttributeError:
             pass
+
+    ctx = GraphicsContext(LOGICAL_RESOLUTION, WINDOW_SCALE)
+    asset_path = Path(__file__).parent / "assets" / "shaders"
+    renderer = Renderer(ctx, asset_path)
 
     world = World()
 
@@ -75,23 +75,11 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                running = False
             input_handler.process_event(event)
 
-        # Networking
-        if host:
-            host.process_network()
-            scene.update(dt)
-            host.broadcast_state(world)
-
-        elif client:
-            ax = input_handler.get_axis("LEFT", "RIGHT")
-            ay = input_handler.get_axis("DOWN", "UP")
-            client.send_input(ax, ay, 0)
-
-            client.update_world(world)
-
-            scene.update(dt)
-
+        scene.update(dt)
         scene.render()
 
     pygame.quit()

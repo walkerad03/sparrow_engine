@@ -1,7 +1,7 @@
 from typing import Tuple
 
 # Display
-LOGICAL_RESOLUTION: Tuple[int, int] = (480, 270)
+LOGICAL_RESOLUTION: Tuple[int, int] = (320, 180)
 WINDOW_SCALE: int = 3
 TILE_SIZE: int = 16
 

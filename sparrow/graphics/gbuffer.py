@@ -10,13 +10,16 @@ class GBuffer:
 
         # Texture 1: Albedo (RGB) + Specular/Emission (Alpha)
         self.albedo = self.ctx.texture((self.width, self.height), 4)
+        self.albedo.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
         # Texture 2: Normal Map (RGB) + Depth/Height (Alpha)
         # Using float16 for precision in lighting calculations
         self.normal = self.ctx.texture((self.width, self.height), 4, dtype="f2")
+        self.normal.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
         # Texture 3: Occlusion (Mask for raycasting shadows)
         self.occlusion = self.ctx.texture((self.width, self.height), 1)
+        self.occlusion.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
         # The Framebuffer that bundles them together
         self.fbo = self.ctx.framebuffer(
