@@ -1,4 +1,3 @@
-import pytest
 
 from sparrow.core.registry import ComponentRegistry
 

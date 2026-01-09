@@ -81,6 +81,7 @@ def main():
 
         scene.update(dt)
         scene.render()
+        # scene.renderer.render_debug(scene.world)
 
     pygame.quit()
     sys.exit()

@@ -36,3 +36,8 @@ class AmbientLight:
     """
 
     color: Tuple[float, float, float] = (0.1, 0.1, 0.2)  # Dark blue tint
+
+
+@dataclass(frozen=True)
+class BlocksLight:
+    pass

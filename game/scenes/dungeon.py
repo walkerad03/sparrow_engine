@@ -13,7 +13,7 @@ from game.constants import GRID_HEIGHT, GRID_WIDTH, TILE_SIZE
 from game.entities.player import create_player
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
-from sparrow.graphics.light import AmbientLight
+from sparrow.graphics.light import AmbientLight, BlocksLight
 from sparrow.graphics.renderer import Renderer
 from sparrow.input.handler import InputHandler
 from sparrow.net.client import Client
@@ -74,13 +74,15 @@ class DungeonScene:
                         Transform(x=wx, y=wy),
                         Sprite("wall_mid", color=(1.0, 1.0, 1.0, 1.0)),  # Grey
                         BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
+                        BlocksLight(),
                     )
 
                 elif tile_id == TILE_GOLD:
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
-                        Sprite("wall_gold", color=(1.0, 0.8, 0.0, 1.0)),  # Gold Tint
+                        Sprite("wall_mid", color=(1.0, 0.8, 0.0, 1.0)),  # Gold Tint
                         BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
+                        BlocksLight(),
                     )
 
                 elif tile_id == TILE_WATER:

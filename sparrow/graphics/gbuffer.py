@@ -18,7 +18,7 @@ class GBuffer:
         self.normal.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
         # Texture 3: Occlusion (Mask for raycasting shadows)
-        self.occlusion = self.ctx.texture((self.width, self.height), 1)
+        self.occlusion = self.ctx.texture((self.width, self.height), 1, dtype="f2")
         self.occlusion.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
         # The Framebuffer that bundles them together

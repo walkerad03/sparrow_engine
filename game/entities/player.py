@@ -1,6 +1,6 @@
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
-from sparrow.graphics.light import PointLight
+from sparrow.graphics.light import PointLight, BlocksLight
 from sparrow.types import EntityId
 
 
