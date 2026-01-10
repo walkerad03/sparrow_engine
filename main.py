@@ -72,9 +72,10 @@ def main():
     def spawn_player_wrapper(world: World, eid: EntityId, **kwargs):
         x: int = kwargs.get("x", 100)
         y: int = kwargs.get("y", 100)
+        z: int = kwargs.get("z", 100)
         net_id = kwargs.get("net_id", 0)
         owner_id = kwargs.get("owner_id", -1)
-        create_player(world, x, y, eid=eid)
+        create_player(world, x, y, z, eid=eid)
 
         world.add_component(eid, NetworkInput())
         world.add_component(eid, NetworkIdentity(net_id, owner_id))

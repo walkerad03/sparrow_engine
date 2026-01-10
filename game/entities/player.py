@@ -9,46 +9,47 @@ from sparrow.types import EntityId
 
 
 def create_player(
-    world: World, x: float, y: float, eid: Optional[EntityId] = None
+    world: World, x: float, y: float, z: float, eid: Optional[EntityId] = None
 ) -> EntityId:
     if eid is None:
         eid = world.create_entity()
     else:
         world.add_entity(eid)
 
-    world.add_component(eid, Transform(x, y))
+    world.add_component(eid, Transform(x, y, z))
     world.add_component(
         eid,
         Sprite(
             texture_id="knight_f_idle_anim_f0",
             color=(1.0, 1.0, 1.0, 1.0),
+            pivot=(0.5, 0.0),
             layer=2,
             skew=-1.0,
         ),
     )
-    world.add_component(eid, BoxCollider(width=10, height=4, offset=(0, -12)))
+    world.add_component(eid, BoxCollider(width=10, height=1, offset=(0, 0)))
 
-    create_skull_light(world, x, y, eid)
+    create_skull_light(world, x, y, z, parent_eid=eid)
 
     return eid
 
 
 def create_skull_light(
-    world: World, x: float, y: float, parent_eid: EntityId
+    world: World, x: float, y: float, z: float, parent_eid: EntityId
 ) -> EntityId:
     eid = world.create_entity(
-        Transform(x, y),
+        Transform(x, y, z),
         Sprite(
             texture_id="skull",
             color=(1.0, 1.0, 1.0, 1.0),
+            pivot=(0.5, 0.5),
             layer=3,
-            skew=-0.5,
+            skew=-1.0,
         ),
         PointLight((102 / 255, 153 / 255, 216 / 255), 150.0, True),
         SmoothFollow(
-            parent_eid, 0, 10, speed=1, wander_radius=10.0, wander_interval=2.0
+            parent_eid, 0, 0, 30, speed=1, wander_radius=10.0, wander_interval=2.0
         ),
-        BoxCollider(width=16, height=16),
     )
 
     return eid

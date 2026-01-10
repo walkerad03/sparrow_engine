@@ -21,7 +21,7 @@ class Protocol:
     _HEADER = struct.Struct("!BB")  # [Type, Version]
     _WELCOME = struct.Struct("!BI")  # [Type, EntityID]
     _INPUT = struct.Struct("!BffB")  # [Type, X, Y, Buttons]
-    _STATE = struct.Struct("!BIff")  # [Type, EntityID, X, Y]
+    _STATE = struct.Struct("!BIfff")  # [Type, EntityID, X, Y]
 
     @staticmethod
     def unpack_packet_type(data: bytes) -> Optional[PacketType]:
@@ -45,8 +45,8 @@ class Protocol:
         return cls._INPUT.pack(PacketType.INPUT, ax, ay, buttons)
 
     @classmethod
-    def pack_entity_state(cls, eid: int, x: float, y: float) -> bytes:
-        return cls._STATE.pack(PacketType.STATE, eid, x, y)
+    def pack_entity_state(cls, eid: int, x: float, y: float, z: float) -> bytes:
+        return cls._STATE.pack(PacketType.STATE, eid, x, y, z)
 
     @classmethod
     def unpack_welcome(cls, data: bytes) -> int:
@@ -59,7 +59,7 @@ class Protocol:
         return ax, ay, btns
 
     @classmethod
-    def unpack_entity_state(cls, data: bytes) -> Tuple[int, float, float]:
+    def unpack_entity_state(cls, data: bytes) -> Tuple[int, float, float, float]:
         # Returns (eid, x, y)
-        _, eid, x, y = cls._STATE.unpack(data)
-        return eid, x, y
+        _, eid, x, y, z = cls._STATE.unpack(data)
+        return eid, x, y, z

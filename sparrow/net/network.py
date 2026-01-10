@@ -118,7 +118,7 @@ def _process_client(
             print(f"[NET] Connected to Server! Assigned ID: {new_cid}")
 
         elif ptype == PacketType.STATE:
-            net_eid, x, y = Protocol.unpack_entity_state(data)
+            net_eid, x, y, z = Protocol.unpack_entity_state(data)
 
             found = False
             for local_eid, net_ident in world.join(NetworkIdentity):
@@ -134,7 +134,9 @@ def _process_client(
                 if 1 in registry.prefabs:
                     local_eid = world.create_entity()
 
-                    registry.prefabs[1](world, local_eid, x=x, y=y, net_id=net_eid)
+                    print(z)
+
+                    registry.prefabs[1](world, local_eid, x=x, y=y, z=z, net_id=net_eid)
 
     if modified:
         return replace(client, connection_id=new_cid, is_connected=new_connected)

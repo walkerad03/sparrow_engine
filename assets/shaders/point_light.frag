@@ -10,7 +10,7 @@ uniform sampler2D u_normal;
 uniform sampler2D u_albedo;    // To light up the floor/walls
 
 // Light Data
-uniform vec2 u_light_pos;
+uniform vec3 u_light_pos;
 uniform vec4 u_color;
 uniform float u_radius;
 
@@ -19,10 +19,6 @@ uniform mat4 u_matrix;
 uniform vec2 u_resolution;
 
 out vec4 f_color;
-
-float random(vec2 st) {
-    return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-}
 
 float interleaved_gradient_noise(vec2 pos) {
     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
@@ -33,11 +29,11 @@ void main() {
     vec2 dummy = v_uv * 0.0001;
 
     // 1. Distance Check
-    float dist = distance(v_pos, u_light_pos);
+    float dist = distance(v_pos, u_light_pos.xy);
     if (dist > u_radius) discard;
 
     // 2. Raycasting (Shadows)
-    vec2 dir = normalize(u_light_pos - v_pos);
+    vec2 dir = normalize(u_light_pos.xy - v_pos);
     float max_dist = dist;
     
     // Quality Settings
@@ -94,11 +90,16 @@ void main() {
     vec3 normal_data = texture(u_normal, uv_here).rgb;
     vec3 N = normalize(normal_data * 2.0 - 1.0);
     
-    float light_height = 1.0;
-    vec3 light_pos_3d = vec3(u_light_pos, light_height);
+    float light_height = u_light_pos.z;
+    vec3 light_pos_3d = u_light_pos;
     vec3 pixel_pos_3d = vec3(v_pos, 0.0);
 
+    vec4 screen_pos = u_matrix * vec4(v_pos, 0.0, 1.0);
+    vec2 screen_uv = (screen_pos.xy / screen_pos.w) * 0.5 + 0.5;
+    
+    
     vec3 L = normalize(light_pos_3d - pixel_pos_3d);
+
 
     float diffuse = max(dot(N, L), 0.0);
 

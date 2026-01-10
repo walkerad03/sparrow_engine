@@ -1,6 +1,9 @@
+import math
 from typing import Tuple
 
 import numpy as np
+
+from sparrow.types import Vector3
 
 
 class Camera:
@@ -49,8 +52,46 @@ class Camera:
         ready for ModernGL uniforms.
         """
         if self._dirty:
-            self._update_matrix()
+            self._update_matrix_perspective()
         return self._matrix.tobytes()
+
+    def _update_matrix_perspective(self):
+        fov_degrees = 60.0
+
+        fov_rad = math.radians(fov_degrees)
+        camera_height = (self.height / 2.0) / math.tan(fov_rad / 2.0)
+        camera_height /= self.zoom
+
+        z_near = 1.0
+        z_far = 10000.0
+
+        aspect = self.width / self.height
+        f = 1.0 / math.tan(fov_rad / 2.0)
+
+        proj = np.array(
+            [
+                [f / aspect, 0, 0, 0],
+                [0, f, 0, 0],
+                [0, 0, (z_far + z_near) / (z_near - z_far), -1],
+                [0, 0, (2 * z_far * z_near) / (z_near - z_far), 0],
+            ],
+            dtype="f4",
+        )
+
+        x, y = self.position
+
+        view = np.array(
+            [
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, 0],
+                [-x, -y, -camera_height, 1],  # <--- The Z offset is critical here
+            ],
+            dtype="f4",
+        )
+
+        self._matrix = np.matmul(view, proj)
+        self._dirty = False
 
     def _update_matrix(self):
         # 1. Orthographic Projection (Left, Right, Bottom, Top, Near, Far)
@@ -87,5 +128,119 @@ class Camera:
         )
 
         # 3. Combine (Row-major multiplication for OpenGL)
+        self._matrix = np.matmul(view, proj)
+        self._dirty = False
+
+
+class Camera3D:
+    def __init__(self, resolution: Tuple[int, int]):
+        self.width, self.height = resolution
+
+        # Camera Configuration
+        self.fov_degrees = 60.0
+        self.pitch_angle = -45.0  # Degrees. -90 is Top-Down. -45 is Isometric-ish.
+        self.distance = 10.0  # How far back the camera sits
+
+        self.move_speed = 5.0  # How fast the Eye follows (Lower = Heav/Laggy)
+        self.look_speed = 10.0  # How fast the Focus turns (Higher = Snappy)
+
+        self.current_target = np.array([0.0, 0.0, 0.0], dtype="f4")
+        self.current_eye = np.array([0.0, 100.0, 15.0], dtype="f4")
+
+        self._matrix = None
+        self._dirty = True
+
+    def update(self, dt: float, target_pos: Vector3):
+        """
+        Smoothly updates the camera to follow the 'target_pos' (Player).
+        """
+        # 1. Calculate Ideal Target (Where we WANT to look)
+        # The player is on the floor (Z=0)
+        ideal_target = np.array(
+            [target_pos[0], target_pos[1], target_pos[2]], dtype="f4"
+        )
+
+        # 2. Calculate Ideal Eye (Where the camera SHOULD be physically)
+        # Based on pitch and distance relative to the *Ideal Target*
+        pitch_rad = math.radians(self.pitch_angle)
+
+        # "North" is Y-Up in standard OpenGL logic, but your game might be Y-Down.
+        # Assuming standard math:
+        offset_z = abs(math.sin(pitch_rad)) * self.distance
+        offset_y = math.cos(pitch_rad) * self.distance
+
+        # The ideal eye is just the target position + the offset
+        ideal_eye = ideal_target + np.array([0.0, -offset_y, offset_z], dtype="f4")
+
+        # 3. Smoothly Interpolate (LERP)
+        # a. Smoothly move the "Look At" point (Target)
+        #    If look_speed is high, we focus on the player quickly.
+        self.current_target += (ideal_target - self.current_target) * (
+            self.look_speed * dt
+        )
+
+        # b. Smoothly move the "Physical Camera" (Eye)
+        #    If move_speed is low, the camera body "drags" behind the player.
+        self.current_eye += (ideal_eye - self.current_eye) * (self.move_speed * dt)
+
+        # Mark matrix as dirty so it recalculates next time we ask for it
+        self._dirty = True
+
+    def look_at(self, eye, target, up):
+        z_axis = eye - target
+        z_axis /= np.linalg.norm(z_axis)
+
+        x_axis = np.cross(up, z_axis)
+        x_axis /= np.linalg.norm(x_axis)
+
+        y_axis = np.cross(z_axis, x_axis)
+
+        return np.array(
+            [
+                [x_axis[0], y_axis[0], z_axis[0], 0],
+                [x_axis[1], y_axis[1], z_axis[1], 0],
+                [x_axis[2], y_axis[2], z_axis[2], 0],
+                [-np.dot(x_axis, eye), -np.dot(y_axis, eye), -np.dot(z_axis, eye), 1],
+            ],
+            dtype="f4",
+        )
+
+    @property
+    def numpy_matrix(self):
+        """Returns the raw 4x4 numpy array (View * Proj)."""
+        if self._dirty:
+            self._update_matrix()
+        return self._matrix
+
+    @property
+    def matrix(self) -> bytes:
+        if self._dirty:
+            self._update_matrix()
+        return self._matrix.tobytes()
+
+    def _update_matrix(self):
+        # 1. Projection
+        fov_rad = math.radians(self.fov_degrees)
+        aspect = self.width / self.height
+        z_near = 1.0
+        z_far = 5000.0
+
+        f = 1.0 / math.tan(fov_rad / 2.0)
+
+        proj = np.array(
+            [
+                [f / aspect, 0, 0, 0],
+                [0, f, 0, 0],
+                [0, 0, (z_far + z_near) / (z_near - z_far), -1],
+                [0, 0, (2 * z_far * z_near) / (z_near - z_far), 0],
+            ],
+            dtype="f4",
+        )
+
+        # 2. View (Use the smoothed variables)
+        up = np.array([0.0, 0.0, 1.0], dtype="f4")
+        view = self.look_at(self.current_eye, self.current_target, up)
+
+        # 3. Combine
         self._matrix = np.matmul(view, proj)
         self._dirty = False

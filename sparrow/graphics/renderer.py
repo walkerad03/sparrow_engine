@@ -2,11 +2,12 @@ from pathlib import Path
 from typing import Any, cast
 
 import moderngl
+import numpy as np
 import pygame
 
 from sparrow.core.components import Sprite, Transform
 from sparrow.core.world import World
-from sparrow.graphics.camera import Camera
+from sparrow.graphics.camera import Camera, Camera3D
 from sparrow.graphics.context import GraphicsContext
 from sparrow.graphics.gbuffer import GBuffer
 from sparrow.graphics.light import BlocksLight, PointLight
@@ -20,7 +21,7 @@ class Renderer:
 
         self.gbuffer = GBuffer(ctx.ctx, ctx.logical_res)
         self.shaders = ShaderManager(ctx.ctx, asset_path)
-        self.camera = Camera(ctx.logical_res)
+        self.camera = Camera3D(ctx.logical_res)
 
         self.textures: dict[str, Any] = {}
         self.get_texture("missing")
@@ -36,7 +37,10 @@ class Renderer:
         )
 
         # 2. Lighting Pass VAO
-        self.light_prog = self.shaders.get("point_light")
+        # self.light_prog = self.shaders.get("point_light")
+        self.light_prog = self.shaders.get_bespoke(
+            "point_light", "point_light.vert", "light.frag"
+        )
         self.light_vao = ctx.ctx.vertex_array(
             self.light_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
         )
@@ -143,7 +147,7 @@ class Renderer:
             final_h: float = tex_h * scale_y * rh
 
             # Per-Instance Uniforms
-            self._set(self.sprite_prog, "u_pos", (trans.x, trans.y))
+            self._set(self.sprite_prog, "u_pos", trans.pos)
             self._set(self.sprite_prog, "u_size", (final_w, final_h))
             self._set(self.sprite_prog, "u_rot", trans.rotation)
             self._set(self.sprite_prog, "u_pivot", sprite.pivot)
@@ -171,17 +175,22 @@ class Renderer:
         self.gbuffer.occlusion.use(location=0)
         self.gbuffer.albedo.use(location=1)
         self.gbuffer.normal.use(location=2)
+        self.gbuffer.depth.use(location=3)
 
         self._set(self.light_prog, "u_occlusion", 0)
         self._set(self.light_prog, "u_albedo", 1)
         self._set(self.light_prog, "u_normal", 2)
+        self._set(self.light_prog, "u_depth", 3)
 
         self._set(self.light_prog, "u_matrix", self.camera.matrix)
         self._set(self.light_prog, "u_resolution", self.ctx.logical_res)
 
+        inv_matrix = np.linalg.inv(self.camera.numpy_matrix)
+        self._set(self.light_prog, "u_inv_matrix", inv_matrix.tobytes())
+
         for _, light, trans in world.join(PointLight, Transform):
             assert isinstance(light, PointLight) and isinstance(trans, Transform)
-            self._set(self.light_prog, "u_light_pos", (trans.x, trans.y))
+            self._set(self.light_prog, "u_light_pos", trans.pos)
 
             c = light.color
             if len(c) == 3:
@@ -190,7 +199,7 @@ class Renderer:
             self._set(self.light_prog, "u_radius", light.radius)
 
             # Quad Size Optimization
-            self._set(self.light_prog, "u_pos", (trans.x, trans.y))
+            self._set(self.light_prog, "u_pos", trans.pos)
             size = light.radius * 2.2
             self._set(self.light_prog, "u_size", (size, size))
 

@@ -3,7 +3,6 @@ import random
 import time
 from dataclasses import replace
 
-from game.components.screen_fade import ScreenFade
 from game.constants import GRID_HEIGHT, GRID_WIDTH, TILE_SIZE
 from game.spatial.generator import (
     TILE_FLOOR,
@@ -15,6 +14,7 @@ from game.spatial.generator import (
 )
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
+from sparrow.graphics.camera import Camera3D
 from sparrow.graphics.light import BlocksLight, PointLight
 from sparrow.graphics.renderer import Renderer
 from sparrow.input.handler import InputHandler
@@ -59,11 +59,17 @@ class DungeonScene:
                     self.world.create_entity(),
                     x=wx,
                     y=wy,
+                    z=0,
                     net_id=0,
                     owner_id=-1,
                 )
 
             print(f"[GAME] Host spawned at Grid({gx}, {gy})")
+
+        cam: Camera3D = self.renderer.camera
+        cam.fov_degrees = 30.0
+        cam.pitch_angle = -35.0
+        cam.distance = 200.0
 
     def update(self, dt: float):
         """Game Logic."""
@@ -95,6 +101,7 @@ class DungeonScene:
                             new_eid,
                             x=wx,
                             y=wy,
+                            z=0,
                             net_id=net_eid,
                             owner_id=cid,
                         )
@@ -117,8 +124,7 @@ class DungeonScene:
 
         for eid, trans, net in self.world.join(Transform, NetworkIdentity):
             if net.owner_id == my_owner_id:
-                self.renderer.camera.look_at(trans.x, trans.y)
-                self.renderer.camera.update(dt)
+                self.renderer.camera.update(dt, trans.pos)
                 break
 
         for eid, light in self.world.join(PointLight):
@@ -224,7 +230,7 @@ class DungeonScene:
         """
 
         for eid, trans, net in self.world.join(Transform, NetworkIdentity):
-            packet = Protocol.pack_entity_state(net.net_id, trans.x, trans.y)
+            packet = Protocol.pack_entity_state(net.net_id, trans.x, trans.y, trans.z)
 
             for addr in server.clients:
                 # Don't send back to owner? (Client Prediction usually handles self)
@@ -275,7 +281,7 @@ class DungeonScene:
                     self.world.create_entity(
                         Transform(x=wx, y=wy),
                         # Water might be transparent or have a different layer
-                        Sprite("water", color=(0.0, 0.0, 1.0, 0.5), layer=1),
+                        Sprite("floor_2", color=(1.0, 1.0, 1.0, 1.0), layer=1),
                         # No Collider? or Trigger Collider?
                     )
 

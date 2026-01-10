@@ -14,12 +14,13 @@ class Transform:
 
     x: float
     y: float
+    z: float = 0.0
     rotation: float = 0.0  # Radians
     scale: Vector2 = (1.0, 1.0)
 
     @property
     def pos(self) -> Vector2:
-        return (self.x, self.y)
+        return (self.x, self.y, self.z)
 
 
 @dataclass(frozen=True)
