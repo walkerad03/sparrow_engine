@@ -64,7 +64,7 @@ class World:
         """Updates an EXISTING resource with a new instance."""
         res_type = type(resource_type)
 
-        if self._resource_manager.try_get(resource_type) is None:
+        if self._resource_manager.try_get(res_type) is None:
             raise KeyError(
                 f"Resource {res_type.__name__} does not exist. "
                 "Use world.add_resource() to initialize global state."

@@ -1,38 +1,54 @@
+from typing import Optional
+from xml.dom.minidom import Entity
+
+from game.components.smooth_follow import SmoothFollow
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
 from sparrow.graphics.light import PointLight
 from sparrow.types import EntityId
 
 
-def create_player(world: World, x: float, y: float) -> EntityId:
-    eid = world.create_entity(
-        Transform(x=x, y=y, scale=1.0),
+def create_player(
+    world: World, x: float, y: float, eid: Optional[EntityId] = None
+) -> EntityId:
+    if eid is None:
+        eid = world.create_entity()
+    else:
+        world.add_entity(eid)
+
+    world.add_component(eid, Transform(x, y))
+    world.add_component(
+        eid,
         Sprite(
-            texture_id="goblin_idle_anim_f0",  # Placeholder ID
+            texture_id="knight_f_idle_anim_f0",
             color=(1.0, 1.0, 1.0, 1.0),
-            layer=2,  # Actor layer
-        ),
-        BoxCollider(width=8, height=8),
-        # The Lantern Light
-        PointLight(
-            radius=150.0, color=(0.992, 0.937, 0.804), intensity=2.0, cast_shadows=True
+            layer=2,
+            skew=-1.0,
         ),
     )
+    world.add_component(eid, BoxCollider(width=10, height=4, offset=(0, -12)))
+
+    create_skull_light(world, x, y, eid)
+
     return eid
 
 
-def create_ghost(world: World, eid: int, x: float, y: float) -> None:
-    world.add_entity(
-        EntityId(eid),
-        Transform(x=x, y=y, scale=1.0),
+def create_skull_light(
+    world: World, x: float, y: float, parent_eid: EntityId
+) -> EntityId:
+    eid = world.create_entity(
+        Transform(x, y),
         Sprite(
-            texture_id="goblin_idle_anim_f0",  # Placeholder ID
+            texture_id="skull",
             color=(1.0, 1.0, 1.0, 1.0),
-            layer=2,  # Actor layer
+            layer=3,
+            skew=-0.5,
         ),
-        BoxCollider(width=8, height=8),
-        # The Lantern Light
-        PointLight(
-            radius=150.0, color=(0.992, 0.937, 0.804), intensity=2.0, cast_shadows=True
+        PointLight((102 / 255, 153 / 255, 216 / 255), 150.0, True),
+        SmoothFollow(
+            parent_eid, 0, 10, speed=1, wander_radius=10.0, wander_interval=2.0
         ),
+        BoxCollider(width=16, height=16),
     )
+
+    return eid

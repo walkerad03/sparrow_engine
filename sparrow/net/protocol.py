@@ -1,6 +1,8 @@
-from enum import IntEnum, auto
 import struct
-from typing import Tuple, Optional
+from enum import IntEnum, auto
+from typing import Optional, Tuple
+
+from sparrow.types import EntityId
 
 
 class PacketType(IntEnum):

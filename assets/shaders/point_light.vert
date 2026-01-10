@@ -12,8 +12,7 @@ out vec2 v_uv;        // Quad UV (0..1)
 
 void main() {
     vec2 scaled = in_vert * u_size;
-    vec2 centered = scaled - (u_size * 0.5);
-    vec2 world_pos = centered + u_pos;
+    vec2 world_pos = scaled + u_pos;
     
     v_pos = world_pos;
     v_uv = in_uv;

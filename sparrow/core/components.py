@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from ..types import Rect, Vector2
+from ..types import EntityId, Rect, Vector2
 
 # --- SPATIAL COMPONENTS ---
 
@@ -15,7 +15,7 @@ class Transform:
     x: float
     y: float
     rotation: float = 0.0  # Radians
-    scale: float = 1.0
+    scale: Vector2 = (1.0, 1.0)
 
     @property
     def pos(self) -> Vector2:
@@ -44,6 +44,7 @@ class Sprite:
     """
 
     texture_id: str  # Key for the Texture Atlas
+    normal_map_id: Optional[str] = None
     layer: int = 0  # Z-Index (0 = Floor, 1 = Items, 2 = Actors)
     color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)  # Tint
 
@@ -53,6 +54,7 @@ class Sprite:
 
     # Pivot point for rotation (0.5, 0.5 is center)
     pivot: Vector2 = (0.5, 0.5)
+    skew: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -76,11 +78,21 @@ class BoxCollider:
 
     width: float
     height: float
-    offset_x: float = 0.0
-    offset_y: float = 0.0
+    offset: Vector2 = (0.0, 0.0)
     is_trigger: bool = False  # If True, detects overlap but doesn't block movement
 
     @property
     def bounds(self) -> Rect:
         """Returns local bounds (x, y, w, h). Needs Transform to get World bounds."""
-        return (self.offset_x, self.offset_y, self.width, self.height)
+        return (self.offset[0], self.offset[1], self.width, self.height)
+
+
+@dataclass
+class ChildOf:
+    """
+    Component: Marks this entity as a child of another.
+    The HierarchySystem will snap this entity's position to the parent's.
+    """
+
+    parent: EntityId
+    offset: Vector2 = (0.0, 0.0)

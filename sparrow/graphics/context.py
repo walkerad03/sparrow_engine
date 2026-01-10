@@ -27,20 +27,20 @@ class GraphicsContext:
         quad_data = array.array(
             "f",
             [
-                -1.0,
-                1.0,
+                -0.5,
+                0.5,
                 0.0,
                 1.0,
-                -1.0,
-                -1.0,
+                -0.5,
+                -0.5,
                 0.0,
                 0.0,
+                0.5,
+                0.5,
                 1.0,
                 1.0,
-                1.0,
-                1.0,
-                1.0,
-                -1.0,
+                0.5,
+                -0.5,
                 1.0,
                 0.0,
             ],
@@ -57,4 +57,4 @@ class GraphicsContext:
     @property
     def dt(self) -> float:
         """Placeholder for actual clock data"""
-        return 1 / 30
+        return 1 / 60

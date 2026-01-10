@@ -19,7 +19,7 @@ class GBuffer:
 
         # Texture 3: Occlusion (Mask for raycasting shadows)
         self.occlusion = self.ctx.texture((self.width, self.height), 1, dtype="f2")
-        self.occlusion.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self.occlusion.filter = (moderngl.LINEAR, moderngl.LINEAR)
 
         # The Framebuffer that bundles them together
         self.fbo = self.ctx.framebuffer(

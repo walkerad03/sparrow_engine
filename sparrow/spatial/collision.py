@@ -7,8 +7,8 @@ from ..types import Rect
 def get_world_bounds(trans: Transform, collider: BoxCollider) -> Rect:
     """Calculates the world-space rectangle of a collider."""
     # Center position - Half Width + Offset
-    left = trans.x + collider.offset_x - (collider.width / 2)
-    top = trans.y + collider.offset_y - (collider.height / 2)
+    left = trans.x + collider.offset[0] - (collider.width / 2)
+    top = trans.y + collider.offset[1] - (collider.height / 2)
     return (left, top, collider.width, collider.height)
 
 

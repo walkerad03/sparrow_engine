@@ -12,6 +12,7 @@ class Camera:
 
         self.zoom = 1.0
         self.width, self.height = resolution
+        self.skew_x = 0.5
 
         self._matrix = np.eye(4, dtype="f4")
         self._dirty = True
@@ -54,10 +55,13 @@ class Camera:
     def _update_matrix(self):
         # 1. Orthographic Projection (Left, Right, Bottom, Top, Near, Far)
         # We center 0,0 in the middle of the screen
-        left = -self.width / 2 / self.zoom
-        right = self.width / 2 / self.zoom
-        bottom = -self.height / 2 / self.zoom
-        top = self.height / 2 / self.zoom
+        w = self.width / self.zoom
+        h = self.height / self.zoom
+
+        left = -w / 2
+        right = w / 2
+        top = h / 2
+        bottom = -h / 2
 
         # Standard Ortho Matrix
         proj = np.array(

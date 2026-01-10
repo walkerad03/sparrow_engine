@@ -6,14 +6,27 @@ from pathlib import Path
 import pygame
 
 from game.constants import LOGICAL_RESOLUTION, PHYSICS_FPS, WINDOW_SCALE
+from game.entities.player import create_player
 from game.scenes.dungeon import DungeonScene
+from game.systems.screen_fade import screen_fade_system
+from game.systems.smooth_follow import smooth_follow_system
 from sparrow.core.world import World
 from sparrow.graphics.context import GraphicsContext
 from sparrow.graphics.renderer import Renderer
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
-from sparrow.net.client import Client
-from sparrow.net.host import Host
+from sparrow.net import transport
+from sparrow.net.components import NetworkIdentity, NetworkInput
+from sparrow.net.network import network_system
+from sparrow.net.protocol import Protocol
+from sparrow.net.resources import (
+    ClientState,
+    NetworkHardware,
+    PrefabRegistry,
+    ServerState,
+)
+from sparrow.systems.hierarchy import hierarchy_system
+from sparrow.types import EntityId
 
 
 def main():
@@ -34,21 +47,40 @@ def main():
 
     world = World()
 
-    host = None
-    client = None
+    port = 5000 if args.host else 0
+    raw_sock = transport.create_socket(port)
+    world.add_resource(NetworkHardware(raw_sock, port))
 
     if args.host:
         print("[GAME] Starting as HOST...")
         pygame.display.set_caption("Sparrow - HOST")
-        host = Host(port=5000)
+        world.add_resource(ServerState())
     elif args.join:
         print(f"[GAME] Joining {args.join}...")
         pygame.display.set_caption("Sparrow - CLIENT")
-        client = Client(server_ip=args.join, server_port=5000)
+        world.add_resource(ClientState(server_addr=(args.join, 5000)))
+
+        print("[NET] Sending Handshake...")
+        transport.send_packet(raw_sock, Protocol.pack_connect(), (args.join, 5000))
     else:
         print("[GAME] No args provided, defaulting to HOST.")
         pygame.display.set_caption("Sparrow - SINGLE PLAYER")
-        host = Host(port=5000)
+        world.add_resource(ServerState())
+
+    registry = PrefabRegistry()
+
+    def spawn_player_wrapper(world: World, eid: EntityId, **kwargs):
+        x: int = kwargs.get("x", 100)
+        y: int = kwargs.get("y", 100)
+        net_id = kwargs.get("net_id", 0)
+        owner_id = kwargs.get("owner_id", -1)
+        create_player(world, x, y, eid=eid)
+
+        world.add_component(eid, NetworkInput())
+        world.add_component(eid, NetworkIdentity(net_id, owner_id))
+
+    registry.prefabs[1] = spawn_player_wrapper
+    world.add_resource(registry)
 
     input_handler = InputHandler()
     world.add_resource(input_handler)
@@ -62,7 +94,7 @@ def main():
 
     input_handler.push_context(base_ctx)
 
-    scene = DungeonScene(world, renderer, host, client)
+    scene = DungeonScene(world, renderer)
     scene.enter()
 
     clock = pygame.time.Clock()
@@ -79,9 +111,15 @@ def main():
                 running = False
             input_handler.process_event(event)
 
+        network_system(world)
+
         scene.update(dt)
+
+        screen_fade_system(world, dt, renderer)
+        hierarchy_system(world)
+        smooth_follow_system(world, dt)
+
         scene.render()
-        # scene.renderer.render_debug(scene.world)
 
     pygame.quit()
     sys.exit()

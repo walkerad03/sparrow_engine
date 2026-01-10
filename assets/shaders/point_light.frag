@@ -6,6 +6,7 @@ in vec2 v_uv;
 
 // The G-Buffer
 uniform sampler2D u_occlusion; // To check for walls
+uniform sampler2D u_normal;
 uniform sampler2D u_albedo;    // To light up the floor/walls
 
 // Light Data
@@ -13,11 +14,20 @@ uniform vec2 u_light_pos;
 uniform vec4 u_color;
 uniform float u_radius;
 
-// Camera Data (Needed to convert WorldPos -> ScreenUV)
+// Camera Data
 uniform mat4 u_matrix;      
 uniform vec2 u_resolution;
 
 out vec4 f_color;
+
+float random(vec2 st) {
+    return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
+float interleaved_gradient_noise(vec2 pos) {
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(pos, magic.xy)));
+}
 
 void main() {
     vec2 dummy = v_uv * 0.0001;
@@ -32,11 +42,14 @@ void main() {
     
     // Quality Settings
     // Higher steps = cleaner shadows but slower
-    int steps = 128; 
+    int steps = 64; 
     float step_size = max_dist / float(steps);
 
-    vec2 ray_pos = v_pos;
+    float jitter = interleaved_gradient_noise(gl_FragCoord.xy);
+    
+    vec2 ray_pos = v_pos + (dir * step_size * jitter);
     float shadow = 1.0;
+    float accumulated_density = 0.0;
 
     for(int i = 0; i < steps; i++) {
         ray_pos += dir * step_size;
@@ -52,11 +65,21 @@ void main() {
         // If > 0.1, it's a wall.
         float occ = texture(u_occlusion, uv).r;
         
-        if (occ > 0.1) {
-            shadow = 0.0;
-            break; // Hit wall, stop checking
+        //if (occ > 0.1) {
+         //   shadow = 0.0;
+          //  break; // Hit wall, stop checking
+        //}
+
+        if (occ > 0.0) {
+            accumulated_density += occ * 2.0; // * 2.0 for sharper walls, remove for foggy walls
+            if (accumulated_density >= 1.0) {
+                shadow = 0.0;
+                break;
+            }
         }
     }
+
+    shadow = max(1.0 - accumulated_density, 0.0);
 
     // 3. Falloff (Quadratic looks best)
     float falloff = pow(1.0 - (dist / u_radius), 2.0);
@@ -65,11 +88,25 @@ void main() {
     // We need the UV of the CURRENT pixel (v_pos)
     vec4 screen_pos_here = u_matrix * vec4(v_pos, 0.0, 1.0);
     vec2 uv_here = (screen_pos_here.xy / screen_pos_here.w) * 0.5 + 0.5;
-
     
     vec4 albedo = texture(u_albedo, uv_here);
 
+    vec3 normal_data = texture(u_normal, uv_here).rgb;
+    vec3 N = normalize(normal_data * 2.0 - 1.0);
+    
+    float light_height = 1.0;
+    vec3 light_pos_3d = vec3(u_light_pos, light_height);
+    vec3 pixel_pos_3d = vec3(v_pos, 0.0);
+
+    vec3 L = normalize(light_pos_3d - pixel_pos_3d);
+
+    float diffuse = max(dot(N, L), 0.0);
+
+    if (normal_data.b > 0.9) { 
+        diffuse = 1.0; 
+     }
+
     // 5. Combine
     // Final = LightColor * Intensity * Shadow * SurfaceColor
-    f_color = (u_color * falloff * shadow * albedo) + vec4(dummy.x, dummy.y, 0.0, 0.0);
+    f_color = (u_color * falloff * shadow * albedo * diffuse) + vec4(dummy.x, dummy.y, 0.0, 0.0);
 }

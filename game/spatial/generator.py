@@ -3,6 +3,7 @@ from typing import Tuple
 
 import numpy as np
 
+from game.constants import TILE_SIZE
 from sparrow.spatial.grid import Grid
 
 # Define Tile IDs here (or import from constants)
@@ -36,11 +37,11 @@ def find_spawn_point(grid: Grid) -> Tuple[int, int]:
     return width // 2, height // 2
 
 
-def generate_dungeon(width: int, height: int) -> Grid:
+def generate_dungeon(width: int, height: int, tile_size: int = TILE_SIZE) -> Grid:
     """
     Game-specific logic to generate a cave system with multiple tile types.
     """
-    grid = Grid(width, height)
+    grid = Grid(width, height, tile_size)
 
     # 1. Initialize with Random Noise (Walls vs Floors)
     # Using int8 allows values from -128 to 127
