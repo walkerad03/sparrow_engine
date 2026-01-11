@@ -55,3 +55,5 @@ class GBufferPass:
             self._set(self.mesh_prog, "u_albedo", 0)
 
             vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+        rc.frame.gbuffer.generate_mipmaps()

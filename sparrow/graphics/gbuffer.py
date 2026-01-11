@@ -10,7 +10,7 @@ class GBuffer:
 
         # Texture 1: Albedo (RGB) + Specular/Emission (Alpha)
         self.albedo = self.ctx.texture((self.width, self.height), 4)
-        self.albedo.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self.albedo.filter = (moderngl.NEAREST_MIPMAP_NEAREST, moderngl.NEAREST)
 
         # Texture 2: Normal Map (RGB) + Depth/Height (Alpha)
         # Using float16 for precision in lighting calculations
@@ -24,7 +24,7 @@ class GBuffer:
         # 4. Depth Texture (Replaces Renderbuffer)
         # We need this to be a texture so we can sample it in the light shader
         self.depth = self.ctx.depth_texture((self.width, self.height))
-        self.depth.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self.depth.filter = (moderngl.NEAREST_MIPMAP_NEAREST, moderngl.NEAREST)
 
         # The Framebuffer that bundles them together
         self.fbo = self.ctx.framebuffer(
@@ -36,6 +36,14 @@ class GBuffer:
         """Bind this buffer for writing (Geometry Pass)."""
         self.fbo.use()
         self.fbo.clear(0.0, 0.0, 0.0, 1.0, depth=1.0)
+
+    def generate_mipmaps(self):
+        """
+        Call this AFTER the Geometry Pass but BEFORE the Lighting Pass.
+        This downsamples the high-res textures into the lower mip levels.
+        """
+        self.albedo.build_mipmaps()
+        self.depth.build_mipmaps()
 
     def bind_textures(self, start_slot: int = 0):
         """Bind textures for reading (Lighting Pass)."""
