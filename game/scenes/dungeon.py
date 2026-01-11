@@ -67,9 +67,9 @@ class DungeonScene:
             print(f"[GAME] Host spawned at Grid({gx}, {gy})")
 
         cam: Camera3D = self.renderer.camera
-        cam.fov_degrees = 30.0
+        cam.fov_degrees = 60.0
         cam.pitch_angle = -35.0
-        cam.distance = 10.0
+        cam.distance = 100.0
 
     def update(self, dt: float):
         """Game Logic."""

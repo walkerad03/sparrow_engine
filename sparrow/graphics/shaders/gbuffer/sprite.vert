@@ -15,7 +15,6 @@ uniform float u_layer; // Z-Index
 uniform vec2 u_pivot;   // e.g. (0.5, 0.5) is center
 uniform vec4 u_region;  // (u, v, w, h)
 
-uniform float u_skew; // 0.0 = Flat, 1.0 = Standing up
 
 out vec2 v_uv;
 
@@ -32,22 +31,7 @@ void main() {
     // Convert to 3d space
     vec3 local_pos_3d = vec3(local_pos_2d, 0.0);
 
-    // Standing up logic
-    float angle_x = u_skew * 1.57079632679;
-
-    float sx = sin(angle_x);
-    float cx = cos(angle_x);
-
-    mat3 rot_x_mat = mat3(
-        1.0, 0.0, 0.0,
-        0.0,  cx,  -sx, // Column 2
-        0.0, sx,  cx  // Column 3
-    );
-
-    vec3 standing_pos = rot_x_mat * local_pos_3d;
-    vec3 final_pos = standing_pos + u_pos;
-
-    gl_Position = u_matrix * vec4(final_pos, 1.0);
+    gl_Position = u_matrix * vec4(u_pos, 1.0);
     gl_Position.z += u_layer * 0.001;
 
     v_uv = vec2(

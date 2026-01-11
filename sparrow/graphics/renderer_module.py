@@ -3,7 +3,6 @@ from typing import Any, cast
 
 import moderngl
 import pygame
-from moderngl import VertexArray
 
 import sparrow.graphics.shaders as shader_pkg
 from sparrow.core.world import World
@@ -37,12 +36,6 @@ class Renderer:
         self.meshes = MeshLibrary(ctx.ctx)
 
         self.shaders.register_engine_shader(
-            "gbuffer_sprite",
-            ENGINE_SHADER_DIR / "gbuffer" / "sprite.vert",
-            ENGINE_SHADER_DIR / "gbuffer" / "sprite.frag",
-        )
-
-        self.shaders.register_engine_shader(
             "gbuffer_mesh",
             ENGINE_SHADER_DIR / "gbuffer" / "mesh.vert",
             ENGINE_SHADER_DIR / "gbuffer" / "mesh.frag",
@@ -55,15 +48,9 @@ class Renderer:
         )
 
         self.shaders.register_engine_shader(
-            "ambient",
+            "composite",
             ENGINE_SHADER_DIR / "post" / "fullscreen.vert",
-            ENGINE_SHADER_DIR / "lighting" / "ambient.frag",
-        )
-
-        self.shaders.register_engine_shader(
-            "blur",
-            ENGINE_SHADER_DIR / "post" / "fullscreen.vert",
-            ENGINE_SHADER_DIR / "post" / "blur.frag",
+            ENGINE_SHADER_DIR / "post" / "composite.frag",
         )
 
         self.textures: dict[str, Any] = {}
@@ -73,11 +60,6 @@ class Renderer:
             (1, 1), 4, data=bytes([128, 128, 255, 255])
         )
 
-        self.sprite_prog = self.shaders.get("gbuffer_sprite").program
-        self.sprite_vao = ctx.ctx.vertex_array(
-            self.sprite_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
-        )
-
         self.mesh_prog = self.shaders.get("gbuffer_mesh").program
 
         self.light_prog = self.shaders.get("point_light").program
@@ -85,23 +67,9 @@ class Renderer:
             self.light_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
         )
 
-        self.ambient_prog = self.shaders.get("ambient").program
-        self.ambient_vao = ctx.ctx.vertex_array(
-            self.ambient_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
-        )
-
-        self.bloom_res = (ctx.logical_res[0] // 2, ctx.logical_res[1] // 2)
-        self.bloom_tex_1 = ctx.ctx.texture(self.bloom_res, 4)
-        self.bloom_tex_2 = ctx.ctx.texture(self.bloom_res, 4)
-        self.bloom_tex_1.filter = (moderngl.LINEAR, moderngl.LINEAR)
-        self.bloom_tex_2.filter = (moderngl.LINEAR, moderngl.LINEAR)
-
-        self.bloom_fbo_1 = ctx.ctx.framebuffer(color_attachments=[self.bloom_tex_1])
-        self.bloom_fbo_2 = ctx.ctx.framebuffer(color_attachments=[self.bloom_tex_2])
-
-        self.blur_prog = self.shaders.get("blur").program
-        self.blur_vao = ctx.ctx.vertex_array(
-            self.blur_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
+        self.composite_prog = self.shaders.get("composite").program
+        self.composite_vao = ctx.ctx.vertex_array(
+            self.composite_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
         )
 
         self.scene_tex = ctx.ctx.texture(ctx.logical_res, 4)
@@ -116,7 +84,7 @@ class Renderer:
                 get_texture=self.get_texture,
             )
         )
-        """
+
         self.render_graph.add_pass(
             LightingPass(
                 light_prog=self.light_prog,
@@ -127,20 +95,15 @@ class Renderer:
 
         self.render_graph.add_pass(
             PostProcessPass(
-                blur_prog=self.blur_prog,
-                blur_vao=self.blur_vao,
-                ambient_prog=self.ambient_prog,
-                ambient_vao=self.ambient_vao,
+                composite_prog=self.composite_prog,
+                composite_vao=self.composite_vao,
                 set_uniform=self._set,
-                bloom_res=self.bloom_res,
             )
         )
-        """
+
         self.frame = FrameResources(
             gbuffer=self.gbuffer,
             scene_fbo=self.scene_fbo,
-            bloom_fbo_1=self.bloom_fbo_1,
-            bloom_fbo_2=self.bloom_fbo_2,
         )
 
     def _set(self, prog: moderngl.Program, name: str, value: Any) -> None:
@@ -196,14 +159,6 @@ class Renderer:
             frame=self.frame,
             draw_list=draw_list,
         )
-
-        # import numpy as np
-
-        # dl = draw_list.transparent or draw_list.opaque
-        # if dl:
-        #    p = dl[0].position
-        #    self.camera.current_target[:] = np.array([p.x, p.y, p.z], dtype="f4")
-        #    self.camera._dirty = True
 
         self.render_graph.execute(rc)
         self.ctx.flip()

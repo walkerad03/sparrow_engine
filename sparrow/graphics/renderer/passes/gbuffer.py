@@ -24,17 +24,15 @@ class GBufferPass:
     def execute(self, rc: RenderContext):
         ctx = rc.ctx
 
-        # rc.frame.gbuffer.use()
-        ctx.screen.use()
+        rc.frame.gbuffer.use()
+
+        ctx.clear(0.0, 0.0, 0.2, 0.0, 1.0)
 
         ctx.enable(moderngl.BLEND | moderngl.DEPTH_TEST)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
-        ctx.clear(0.0, 0.0, 0.0, 0.0, 1.0)
-
         # Global Uniforms
-        # self._set(self.mesh_prog, "u_view_proj", rc.camera.matrix)
-        self._set(self.mesh_prog, "u_view_proj", np.eye(4, dtype="f4").tobytes())
+        self._set(self.mesh_prog, "u_view_proj", rc.camera.matrix)
 
         draw_list = rc.draw_list
 

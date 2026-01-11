@@ -15,7 +15,6 @@ class Camera:
 
         self.zoom = 1.0
         self.width, self.height = resolution
-        self.skew_x = 0.5
 
         self._matrix = np.eye(4, dtype="f4")
         self._dirty = True
@@ -225,9 +224,6 @@ class Camera3D:
         return self._matrix.tobytes()
 
     def _update_matrix(self) -> None:
-        print("[DBG] eye:", self.current_eye)
-        print("[DBG] target:", self.current_target)
-
         # 1. Projection
         fov_rad = math.radians(self.fov_degrees)
         aspect = self.width / self.height
@@ -251,5 +247,6 @@ class Camera3D:
         view = self.look_at(self.current_eye, self.current_target, up)
 
         # 3. Combine
-        self._matrix = np.matmul(proj, view)
+        # FIX: Multiply view @ proj to get (Projection * View)^T
+        self._matrix = np.matmul(view, proj)
         self._dirty = False

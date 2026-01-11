@@ -16,11 +16,19 @@ class DrawItem:
     scale: Vector3
 
 
+@dataclass(slots=True)
+class DrawLight:
+    position: Vector3
+    color: tuple[float, float, float, float]
+    radius: float
+
+
 @dataclass
 class RenderDrawList:
     opaque: List[DrawItem]
     transparent: List[DrawItem]
+    lights: List[DrawLight]
 
     @classmethod
     def empty(cls) -> RenderDrawList:
-        return cls([], [])
+        return cls([], [], [])

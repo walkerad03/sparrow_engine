@@ -22,7 +22,11 @@ def transform_to_matrix(
     S[1, 1] = scale.y
     S[2, 2] = scale.z
 
-    return T @ R @ S
+    # Calculate standard matrix
+    model = T @ R @ S
+
+    # FIX: Return the Transpose so it arrives correctly in OpenGL
+    return model.T
 
 
 @dataclass(frozen=True)
@@ -76,7 +80,6 @@ class Sprite:
 
     # Pivot point for rotation (0.5, 0.5 is center)
     pivot: Vector2 = Vector2(0.5, 0.5)
-    skew: float = 0.0  # deprecated
 
 
 @dataclass(frozen=True)

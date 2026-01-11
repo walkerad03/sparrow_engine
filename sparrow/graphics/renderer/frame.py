@@ -8,5 +8,3 @@ from typing import Any
 class FrameResources:
     gbuffer: Any
     scene_fbo: Any
-    bloom_fbo_1: Any
-    bloom_fbo_2: Any

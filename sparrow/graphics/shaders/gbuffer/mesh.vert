@@ -10,7 +10,6 @@ out vec2 v_uv;
 
 void main() {
     v_uv = in_uv;
-    // gl_Position = u_view_proj * u_model * vec4(in_pos, 1.0);
 
     gl_Position = u_view_proj * u_model * vec4(in_pos, 1.0);
 }
