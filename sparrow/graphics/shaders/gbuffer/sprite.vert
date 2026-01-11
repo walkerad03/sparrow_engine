@@ -9,7 +9,7 @@ uniform mat4 u_matrix;
 
 // Per-Instance Uniforms (Transform)
 uniform vec3 u_pos;
-uniform vec2 u_size;
+uniform vec2 u_scale;
 uniform float u_rot;
 uniform float u_layer; // Z-Index
 uniform vec2 u_pivot;   // e.g. (0.5, 0.5) is center
@@ -20,8 +20,8 @@ uniform float u_skew; // 0.0 = Flat, 1.0 = Standing up
 out vec2 v_uv;
 
 void main() {
-    vec2 pivot_offset = (vec2(0.5, 0.5) - u_pivot) * u_size;
-    vec2 local_pos_2d = in_vert * u_size + pivot_offset;
+    vec2 pivot_offset = (vec2(0.5, 0.5) - u_pivot) * u_scale;
+    vec2 local_pos_2d = in_vert * u_scale + pivot_offset;
 
     // Rotate
     float s = sin(u_rot);

@@ -3,7 +3,7 @@ from dataclasses import replace
 from game.components.screen_fade import ScreenFade
 from sparrow.core.components import Sprite, Transform
 from sparrow.core.world import World
-from sparrow.graphics.renderer import Renderer
+from sparrow.graphics.renderer_module import Renderer
 from sparrow.types import EntityId
 
 

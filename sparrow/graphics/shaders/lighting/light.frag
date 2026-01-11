@@ -123,7 +123,7 @@ void main() {
 
     float depth = texture(u_depth, pixel_uv).r;
     float aberration = smoothstep(0.1, 1.0, depth);
-    aberration *= 0.001; // TUNE THIS (screen-space units)
+    aberration *= 0.003; // TUNE THIS (screen-space units)
 
     vec2 dir = normalize(pixel_uv - vec2(0.5));
 

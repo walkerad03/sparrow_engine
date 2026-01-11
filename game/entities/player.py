@@ -5,7 +5,7 @@ from game.components.smooth_follow import SmoothFollow
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
 from sparrow.graphics.light import PointLight
-from sparrow.types import EntityId
+from sparrow.types import EntityId, Vector2
 
 
 def create_player(
@@ -22,8 +22,8 @@ def create_player(
         Sprite(
             texture_id="knight_f_idle_anim_f0",
             color=(1.0, 1.0, 1.0, 1.0),
-            pivot=(0.5, 0.0),
-            layer=2,
+            pivot=Vector2(0.5, 0.0),
+            layer=3,
             skew=-1.0,
         ),
     )
@@ -42,7 +42,7 @@ def create_skull_light(
         Sprite(
             texture_id="skull",
             color=(1.0, 1.0, 1.0, 1.0),
-            pivot=(0.5, 0.5),
+            pivot=Vector2(0.5, 0.0),
             layer=3,
             skew=-1.0,
         ),

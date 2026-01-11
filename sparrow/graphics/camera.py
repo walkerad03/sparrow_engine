@@ -147,7 +147,7 @@ class Camera3D:
         self.current_target = np.array([0.0, 0.0, 0.0], dtype="f4")
         self.current_eye = np.array([0.0, 100.0, 15.0], dtype="f4")
 
-        self._matrix = None
+        self._matrix: np.ndarray | None = None
         self._dirty = True
 
     def update(self, dt: float, target_pos: Vector3):
@@ -186,28 +186,33 @@ class Camera3D:
         # Mark matrix as dirty so it recalculates next time we ask for it
         self._dirty = True
 
-    def look_at(self, eye, target, up):
-        z_axis = eye - target
-        z_axis /= np.linalg.norm(z_axis)
+    def look_at(
+        self, eye: np.ndarray, target: np.ndarray, up: np.ndarray
+    ) -> np.ndarray:
+        f = target - eye
+        f = f / np.linalg.norm(f)
 
-        x_axis = np.cross(up, z_axis)
-        x_axis /= np.linalg.norm(x_axis)
+        s = np.cross(f, up)
+        s = s / np.linalg.norm(s)
 
-        y_axis = np.cross(z_axis, x_axis)
+        u = np.cross(s, f)
 
-        return np.array(
+        # Column-vector convention, written as a row-major numpy array.
+        # Translation lives in the LAST COLUMN (not last row).
+        view = np.array(
             [
-                [x_axis[0], y_axis[0], z_axis[0], 0],
-                [x_axis[1], y_axis[1], z_axis[1], 0],
-                [x_axis[2], y_axis[2], z_axis[2], 0],
-                [-np.dot(x_axis, eye), -np.dot(y_axis, eye), -np.dot(z_axis, eye), 1],
+                [s[0], u[0], -f[0], 0.0],
+                [s[1], u[1], -f[1], 0.0],
+                [s[2], u[2], -f[2], 0.0],
+                [-np.dot(s, eye), -np.dot(u, eye), np.dot(f, eye), 1.0],
             ],
             dtype="f4",
         )
+        return view
 
     @property
     def numpy_matrix(self):
-        """Returns the raw 4x4 numpy array (View * Proj)."""
+        """Returns the View-Projection matrix (Projection * View), transposed for GLSL."""
         if self._dirty:
             self._update_matrix()
         return self._matrix
@@ -216,23 +221,27 @@ class Camera3D:
     def matrix(self) -> bytes:
         if self._dirty:
             self._update_matrix()
+        assert isinstance(self._matrix, np.ndarray)
         return self._matrix.tobytes()
 
-    def _update_matrix(self):
+    def _update_matrix(self) -> None:
+        print("[DBG] eye:", self.current_eye)
+        print("[DBG] target:", self.current_target)
+
         # 1. Projection
         fov_rad = math.radians(self.fov_degrees)
         aspect = self.width / self.height
-        z_near = 1.0
+        z_near = 0.01
         z_far = 5000.0
 
         f = 1.0 / math.tan(fov_rad / 2.0)
 
         proj = np.array(
             [
-                [f / aspect, 0, 0, 0],
-                [0, f, 0, 0],
-                [0, 0, (z_far + z_near) / (z_near - z_far), -1],
-                [0, 0, (2 * z_far * z_near) / (z_near - z_far), 0],
+                [f / aspect, 0.0, 0.0, 0.0],
+                [0.0, f, 0.0, 0.0],
+                [0.0, 0.0, (z_far + z_near) / (z_near - z_far), -1.0],
+                [0.0, 0.0, (2.0 * z_far * z_near) / (z_near - z_far), 0.0],
             ],
             dtype="f4",
         )
@@ -242,5 +251,5 @@ class Camera3D:
         view = self.look_at(self.current_eye, self.current_target, up)
 
         # 3. Combine
-        self._matrix = np.matmul(view, proj)
+        self._matrix = np.matmul(proj, view)
         self._dirty = False

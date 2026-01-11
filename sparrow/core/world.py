@@ -10,18 +10,25 @@ from typing import (
     Type,
     TypeVar,
     TypeVarTuple,
-    Unpack,
+    overload,
 )
 
 from sparrow.core.archetype import Archetype
+from sparrow.core.component import Component
 from sparrow.core.events import EventManager
 from sparrow.core.registry import ComponentRegistry
 from sparrow.core.resources import ResourceManager
 from sparrow.types import ArchetypeMask, EntityId
 
 T = TypeVar("T")
-E = TypeVar("E")
+Ev = TypeVar("Ev")
 Ts = TypeVarTuple("Ts")
+
+A = TypeVar("A", bound=Component)
+B = TypeVar("B", bound=Component)
+C = TypeVar("C", bound=Component)
+D = TypeVar("D", bound=Component)
+E = TypeVar("E", bound=Component)
 
 
 class EntityRecord:
@@ -60,7 +67,7 @@ class World:
         """Retrieves a resource or returns None."""
         return self._resource_manager.try_get(resource_type)
 
-    def mutate_resource(self, resource_type: Type[T]) -> None:
+    def mutate_resource(self, resource_type: Any) -> None:
         """Updates an EXISTING resource with a new instance."""
         res_type = type(resource_type)
 
@@ -77,7 +84,7 @@ class World:
         """Queues an event signal."""
         self._event_manager.emit(event)
 
-    def get_events(self, event_type: Type[E]) -> List[E]:
+    def get_events(self, event_type: Type[Ev]) -> List[Ev]:
         """Consumes and returns all events of the given type."""
         return self._event_manager.get(event_type)
 
@@ -200,9 +207,26 @@ class World:
 
     # QUERIES
 
+    @overload
+    def join(self, a: Type[A], /) -> Iterator[Tuple[EntityId, A]]: ...
+    @overload
+    def join(self, a: Type[A], b: Type[B], /) -> Iterator[Tuple[EntityId, A, B]]: ...
+    @overload
     def join(
-        self, *component_types: Type[Unpack[Ts]]
-    ) -> Iterator[Tuple[EntityId, Unpack[Ts]]]:
+        self, a: Type[A], b: Type[B], c: Type[C], /
+    ) -> Iterator[Tuple[EntityId, A, B, C]]: ...
+    @overload
+    def join(
+        self, a: Type[A], b: Type[B], c: Type[C], d: Type[D], /
+    ) -> Iterator[Tuple[EntityId, A, B, C, D]]: ...
+    @overload
+    def join(
+        self, a: Type[A], b: Type[B], c: Type[C], d: Type[D], e: Type[E], /
+    ) -> Iterator[Tuple[EntityId, A, B, C, D, E]]: ...
+    def join(
+        self,
+        *component_types: Type[Component],
+    ) -> Iterator[tuple[EntityId, ...]]:
         query_mask = 0
         for t in component_types:
             query_mask |= ComponentRegistry.get_mask(t)

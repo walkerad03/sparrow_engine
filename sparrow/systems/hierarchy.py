@@ -1,3 +1,5 @@
+from typing import reveal_type
+
 from sparrow.core.components import ChildOf, Transform
 from sparrow.core.world import World
 
@@ -5,6 +7,7 @@ from sparrow.core.world import World
 def hierarchy_system(world: World) -> None:
     # Query for all entities that have a Transform and are Children
     for child_eid, child_trans, relation in world.join(Transform, ChildOf):
+        reveal_type(child_trans)
         assert isinstance(child_trans, Transform) and isinstance(relation, ChildOf)
         # 1. Try to get the Parent's Transform
         parent_trans = world.component(relation.parent, Transform)

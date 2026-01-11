@@ -16,7 +16,7 @@ from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
 from sparrow.graphics.camera import Camera3D
 from sparrow.graphics.light import BlocksLight, PointLight
-from sparrow.graphics.renderer import Renderer
+from sparrow.graphics.renderer_module import Renderer
 from sparrow.input.handler import InputHandler
 from sparrow.net import transport
 from sparrow.net.components import NetworkIdentity, NetworkInput
@@ -69,7 +69,7 @@ class DungeonScene:
         cam: Camera3D = self.renderer.camera
         cam.fov_degrees = 30.0
         cam.pitch_angle = -35.0
-        cam.distance = 200.0
+        cam.distance = 10.0
 
     def update(self, dt: float):
         """Game Logic."""

@@ -1,9 +1,28 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple
 
-from ..types import EntityId, Rect, Vector2
+import numpy as np
+
+from sparrow.types import EntityId, Quaternion, Rect, Vector2, Vector3
 
 # --- SPATIAL COMPONENTS ---
+
+
+def transform_to_matrix(
+    position: Vector3,
+    rotation: Quaternion,
+    scale: Vector3,
+) -> np.ndarray:
+    T = np.eye(4, dtype=np.float32)
+    T[0:3, 3] = [position.x, position.y, position.z]
+    R = rotation.to_matrix4()
+
+    S = np.eye(4, dtype=np.float32)
+    S[0, 0] = scale.x
+    S[1, 1] = scale.y
+    S[2, 2] = scale.z
+
+    return T @ R @ S
 
 
 @dataclass(frozen=True)
@@ -15,12 +34,14 @@ class Transform:
     x: float
     y: float
     z: float = 0.0
-    rotation: float = 0.0  # Radians
-    scale: Vector2 = (1.0, 1.0)
+    # pos: Vector3 = Vector3(0.0, 0.0, 0.0)
+    # rot: float = 0.0  # Radians
+    rot: Quaternion = Quaternion.identity()
+    scale: Vector3 = Vector3(16.0, 16.0, 16.0)
 
-    @property
-    def pos(self) -> Vector2:
-        return (self.x, self.y, self.z)
+    @property  # TODO: Remove this in favor of true `pos` attribute
+    def pos(self) -> Vector3:
+        return Vector3(self.x, self.y, self.z)
 
 
 @dataclass(frozen=True)
@@ -54,8 +75,8 @@ class Sprite:
     region: Optional[Rect] = None
 
     # Pivot point for rotation (0.5, 0.5 is center)
-    pivot: Vector2 = (0.5, 0.5)
-    skew: float = 0.0
+    pivot: Vector2 = Vector2(0.5, 0.5)
+    skew: float = 0.0  # deprecated
 
 
 @dataclass(frozen=True)
@@ -79,7 +100,7 @@ class BoxCollider:
 
     width: float
     height: float
-    offset: Vector2 = (0.0, 0.0)
+    offset: Vector2 = Vector2(0.0, 0.0)
     is_trigger: bool = False  # If True, detects overlap but doesn't block movement
 
     @property
@@ -96,4 +117,12 @@ class ChildOf:
     """
 
     parent: EntityId
-    offset: Vector2 = (0.0, 0.0)
+    offset: Vector2 = Vector2(0.0, 0.0)
+
+
+@dataclass
+class RenderSettings:
+    pipeline: Literal["deferred", "forward"] = "deferred"
+    enable_bloom: bool = True
+    enable_ssao: bool = False
+    enable_chromatic: bool = False

@@ -12,7 +12,8 @@ from game.systems.screen_fade import screen_fade_system
 from game.systems.smooth_follow import smooth_follow_system
 from sparrow.core.world import World
 from sparrow.graphics.context import GraphicsContext
-from sparrow.graphics.renderer import Renderer
+from sparrow.graphics.renderer.draw_list import RenderDrawList
+from sparrow.graphics.renderer_module import Renderer
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
 from sparrow.net import transport
@@ -42,10 +43,12 @@ def main():
             pass
 
     ctx = GraphicsContext(LOGICAL_RESOLUTION, WINDOW_SCALE)
-    asset_path = Path(__file__).parent / "assets" / "shaders"
+    asset_path = Path(__file__).parent / "sparrow" / "graphics" / "shaders"
     renderer = Renderer(ctx, asset_path)
 
     world = World()
+
+    world.add_resource(RenderDrawList.empty())
 
     port = 5000 if args.host else 0
     raw_sock = transport.create_socket(port)
