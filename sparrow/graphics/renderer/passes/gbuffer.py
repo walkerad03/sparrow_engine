@@ -1,7 +1,6 @@
 from typing import Any, Callable
 
 import moderngl
-import numpy as np
 
 from sparrow.core.components import transform_to_matrix
 from sparrow.graphics.renderer.graph import RenderContext

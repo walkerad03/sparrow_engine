@@ -12,8 +12,7 @@ uniform vec4 u_color;
 uniform float u_radius;
 
 uniform mat4 u_inv_view_proj;
-
-uniform vec2 u_resolution;
+uniform mat4 u_view_proj; // <--- This matches 'u_matrix' from your old shader
 
 vec3 reconstruct_world_pos(vec2 uv, float depth) {
     vec4 clip = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
@@ -22,23 +21,57 @@ vec3 reconstruct_world_pos(vec2 uv, float depth) {
 }
 
 void main() {
-    float depth = texture(u_depth, v_uv).r;
-    if (depth == 1.0) discard;
+    float my_depth = texture(u_depth, v_uv).r;
+    
+    // 1. Reconstruct World Position of the pixel we are lighting
+    vec3 world_pos = reconstruct_world_pos(v_uv, my_depth);
 
-    vec3 world_pos = reconstruct_world_pos(v_uv, depth);
-
-    vec3 N = normalize(texture(u_normal, v_uv).rgb * 2.0 - 1.0);
-    vec3 L = u_light_pos - world_pos;
-
-    float dist = length(L);
+    // 2. Distance Check
+    float dist = distance(world_pos, u_light_pos);
     if (dist > u_radius) discard;
 
-    vec3 light_dir = normalize(L);
-    float diffuse = max(dot(N, light_dir), 0.0);
+    // 3. Raycasting (Shadows) - Adapted from your Old Shader
+    vec3 dir = normalize(u_light_pos - world_pos);
+    float max_dist = dist;
+    
+    int steps = 64; 
+    float step_size = max_dist / float(steps);
 
-    float attenuation = pow(1.0 - dist / u_radius, 2.0);
+    vec3 ray_pos = world_pos;
+    float shadow = 1.0;
+    
+    // Offset slightly to avoid self-shadowing on the pixel itself
+    ray_pos += dir * (step_size * 2.0);
 
-    vec4 albedo = texture(u_albedo, v_uv);
+    for(int i = 0; i < steps; i++) {
+        ray_pos += dir * step_size;
+        
+        // --- COORDINATE CONVERSION (Your Old Logic) ---
+        // Project Ray World Pos -> Screen Space -> NDC -> UV
+        vec4 screen_pos = u_view_proj * vec4(ray_pos, 1.0);
+        vec2 ndc = screen_pos.xy / screen_pos.w; 
+        vec2 uv = ndc * 0.5 + 0.5;
 
-    f_color = albedo * u_color * diffuse * attenuation;
+        // Check bounds to prevent wrapping artifacts
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
+
+        // --- OCCLUSION CHECK ---
+        // We use Depth as Occlusion.
+        // Assuming Floor is at Depth ~1.0 (or whatever you clear to).
+        // Anything significantly closer (e.g. < 0.99) is a "Wall".
+        float occ_depth = texture(u_depth, uv).r;
+        
+        // If the ray passes over something that is "tall" (low depth value)
+        // relative to the floor, it blocks the light.
+        if (occ_depth < 0.99) { 
+            shadow = 0.0;
+            break; 
+        }
+    }
+
+    // 4. Falloff
+    float falloff = pow(max(1.0 - (dist / u_radius), 0.0), 2.0);
+
+    // 5. Combine (No Albedo multiplication here, that happens in Post Process)
+    f_color = u_color * falloff * shadow;
 }

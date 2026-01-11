@@ -34,7 +34,11 @@ class PostProcessPass:
         rc.frame.gbuffer.albedo.use(0)
         rc.frame.scene_fbo.color_attachments[0].use(1)
 
+        rc.frame.gbuffer.depth.use(2)
+
         self._set(self.prog, "u_diffuse", 0)
         self._set(self.prog, "u_lighting", 1)
+
+        self._set(self.prog, "u_depth", 2)
 
         self.vao.render(mode=moderngl.TRIANGLE_STRIP)

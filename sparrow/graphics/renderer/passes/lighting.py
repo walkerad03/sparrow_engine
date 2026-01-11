@@ -16,8 +16,8 @@ class LightingPass:
         light_vao: moderngl.VertexArray,
         set_uniform: Callable[[moderngl.Program, str, Any], None],
     ) -> None:
-        self.light_prog = light_prog
-        self.light_vao = light_vao
+        self.prog = light_prog
+        self.vao = light_vao
         self._set = set_uniform
 
     def execute(self, rc: RenderContext) -> None:
@@ -37,19 +37,20 @@ class LightingPass:
         rc.frame.gbuffer.normal.use(location=1)
         rc.frame.gbuffer.depth.use(location=2)
 
-        self._set(self.light_prog, "u_albedo", 0)
-        self._set(self.light_prog, "u_normal", 1)
-        self._set(self.light_prog, "u_depth", 2)
+        self._set(self.prog, "u_albedo", 0)
+        self._set(self.prog, "u_normal", 1)
+        self._set(self.prog, "u_depth", 2)
 
         # Camera uniforms
         inv_vp = np.linalg.inv(rc.camera.numpy_matrix)
-        self._set(self.light_prog, "u_inv_view_proj", inv_vp.tobytes())
-        self._set(self.light_prog, "u_resolution", rc.ctx.viewport[2:4])
+        self._set(self.prog, "u_inv_view_proj", inv_vp.tobytes())
+        self._set(self.prog, "u_view_proj", rc.camera.matrix)
+        self._set(self.prog, "u_resolution", rc.ctx.viewport[2:4])
 
         # Accumulate lights
         for light in rc.draw_list.lights:
-            self._set(self.light_prog, "u_light_pos", light.position)
-            self._set(self.light_prog, "u_color", light.color)
-            self._set(self.light_prog, "u_radius", light.radius)
+            self._set(self.prog, "u_light_pos", light.position)
+            self._set(self.prog, "u_color", light.color)
+            self._set(self.prog, "u_radius", light.radius)
 
-            self.light_vao.render(mode=moderngl.TRIANGLE_STRIP)
+            self.vao.render(mode=moderngl.TRIANGLE_STRIP)

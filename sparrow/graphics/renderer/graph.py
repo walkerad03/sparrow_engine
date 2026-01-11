@@ -5,7 +5,6 @@ from typing import List, Protocol
 
 import moderngl
 
-from sparrow.core.world import World
 from sparrow.graphics.assets.materials import MaterialLibrary
 from sparrow.graphics.assets.meshes import MeshLibrary
 from sparrow.graphics.assets.shaders import ShaderLibrary

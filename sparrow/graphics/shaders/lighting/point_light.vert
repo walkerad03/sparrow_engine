@@ -5,8 +5,9 @@ in vec2 in_uv;
 out vec2 v_uv;
 
 void main() {
-    v_uv = in_vert * 0.5 + 0.5;
-    v_uv += in_uv * 0.00000001;
+    // Pass UVs directly (0.0 to 1.0)
+    v_uv = in_uv;
 
-    gl_Position = vec4(in_vert, 0.0, 1.0);
+    // Scale Quad (-0.5 to 0.5) -> Clip Space (-1.0 to 1.0)
+    gl_Position = vec4(in_vert * 2.0, 0.0, 1.0);
 }
