@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 
+from sparrow.core.component import Component
 from sparrow.types import EntityId, Vector3
 
 
 @dataclass
-class SmoothFollow:
+class SmoothFollow(Component):
     """
     Component: Entity will float towards the target using interpolation.
     """

@@ -15,6 +15,7 @@ from game.spatial.generator import (
 from sparrow.core.components import BoxCollider, Sprite, Transform
 from sparrow.core.world import World
 from sparrow.graphics.camera import Camera3D
+from sparrow.graphics.components import Renderable
 from sparrow.graphics.light import BlocksLight, PointLight
 from sparrow.graphics.renderer_module import Renderer
 from sparrow.input.handler import InputHandler
@@ -29,7 +30,7 @@ from sparrow.net.resources import (
 )
 from sparrow.spatial.collision import aabb_vs_aabb, get_world_bounds
 from sparrow.spatial.grid import Grid
-from sparrow.types import EntityId
+from sparrow.types import EntityId, Vector3
 
 
 class DungeonScene:
@@ -257,7 +258,7 @@ class DungeonScene:
 
                 elif tile_id == TILE_WALL:
                     self.world.create_entity(
-                        Transform(x=wx, y=wy),
+                        Transform(x=wx, y=wy, z=8.0),
                         Sprite(
                             "brick",
                             normal_map_id="brick_n",
@@ -266,6 +267,12 @@ class DungeonScene:
                         ),  # Grey
                         BoxCollider(width=TILE_SIZE, height=TILE_SIZE),
                         BlocksLight(),
+                        Renderable(
+                            mesh_id="cube",  # <--- Use the new cube mesh
+                            material="brick",  # Texture to use
+                            domain="mesh",  # Render in the opaque/mesh pass
+                            blend="alpha",  # Walls are solid
+                        ),
                     )
 
                 elif tile_id == TILE_GOLD:

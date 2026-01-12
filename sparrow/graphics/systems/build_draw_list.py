@@ -1,5 +1,3 @@
-from pygame import draw
-
 from sparrow.core.components import Transform
 from sparrow.core.world import World
 from sparrow.graphics.components import Renderable
@@ -11,8 +9,6 @@ def build_draw_list_system(world: World) -> None:
     draw_list = RenderDrawList.empty()
 
     for eid, renderable, transform in world.join(Renderable, Transform):
-        assert isinstance(renderable, Renderable) and isinstance(transform, Transform)
-
         item = DrawItem(
             eid=eid,
             renderable=renderable,
@@ -27,8 +23,6 @@ def build_draw_list_system(world: World) -> None:
             draw_list.transparent.append(item)
 
     for eid, light, transform in world.join(PointLight, Transform):
-        assert isinstance(light, PointLight) and isinstance(transform, Transform)
-
         item = DrawLight(
             position=transform.pos,
             color=(

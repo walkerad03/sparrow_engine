@@ -10,7 +10,7 @@ from typing import (
     Type,
     TypeVar,
     TypeVarTuple,
-    overload,
+    Unpack,
 )
 
 from sparrow.core.archetype import Archetype
@@ -23,6 +23,7 @@ from sparrow.types import ArchetypeMask, EntityId
 T = TypeVar("T")
 Ev = TypeVar("Ev")
 Ts = TypeVarTuple("Ts")
+Cs = TypeVarTuple("Cs")  # variadic component types for join()
 
 A = TypeVar("A", bound=Component)
 B = TypeVar("B", bound=Component)
@@ -207,26 +208,24 @@ class World:
 
     # QUERIES
 
-    @overload
-    def join(self, a: Type[A], /) -> Iterator[Tuple[EntityId, A]]: ...
-    @overload
-    def join(self, a: Type[A], b: Type[B], /) -> Iterator[Tuple[EntityId, A, B]]: ...
-    @overload
-    def join(
-        self, a: Type[A], b: Type[B], c: Type[C], /
-    ) -> Iterator[Tuple[EntityId, A, B, C]]: ...
-    @overload
-    def join(
-        self, a: Type[A], b: Type[B], c: Type[C], d: Type[D], /
-    ) -> Iterator[Tuple[EntityId, A, B, C, D]]: ...
-    @overload
-    def join(
-        self, a: Type[A], b: Type[B], c: Type[C], d: Type[D], e: Type[E], /
-    ) -> Iterator[Tuple[EntityId, A, B, C, D, E]]: ...
     def join(
         self,
-        *component_types: Type[Component],
-    ) -> Iterator[tuple[EntityId, ...]]:
+        *component_types: Unpack[Tuple[Type[Cs], ...]],
+    ) -> Iterator[Tuple[EntityId, *Cs]]:
+        """Query entities that have *all* of the supplied component types.
+
+        Args:
+            *component_types: One or more component classes to filter on.
+                The classes do **not** need to inherit from ``Component`` –
+                they only need to be registered with ``ComponentRegistry``.
+
+        Yields:
+            A tuple where the first element is the ``EntityId`` followed by
+            the component instances in the same order as ``component_types``.
+
+        The function builds a bit-mask from the supplied types, iterates over
+        all archetypes, and yields matching rows using column‑arithmetic.
+        """
         query_mask = 0
         for t in component_types:
             query_mask |= ComponentRegistry.get_mask(t)

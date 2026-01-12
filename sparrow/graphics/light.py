@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from typing import Tuple
 
+from sparrow.core.component import Component
+
 
 @dataclass(frozen=True)
-class PointLight:
+class PointLight(Component):
     """
     Omni-directional light source.
     """
@@ -14,7 +16,7 @@ class PointLight:
 
 
 @dataclass(frozen=True)
-class ConeLight:
+class ConeLight(Component):
     """
     Directional light source (Flashlight/Lantern).
     """
@@ -27,7 +29,7 @@ class ConeLight:
 
 
 @dataclass(frozen=True)
-class AmbientLight:
+class AmbientLight(Component):
     """
     Global base light level.
     Usually very low (0.1) for 'The Old Wound' to ensure darkness.
@@ -37,5 +39,5 @@ class AmbientLight:
 
 
 @dataclass(frozen=True)
-class BlocksLight:
+class BlocksLight(Component):
     pass

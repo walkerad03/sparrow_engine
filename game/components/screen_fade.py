@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 
+from sparrow.core.component import Component
+
 
 @dataclass
-class ScreenFade:
+class ScreenFade(Component):
     """
     Component: Controls the alpha transparency of an entity over time.
     """

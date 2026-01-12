@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from sparrow.core.component import Component
+
 RenderDomain = Literal["sprite", "mesh"]
 BlendMode = Literal["opaque", "alpha", "add"]
 
 
 @dataclass(frozen=True)
-class Renderable:
+class Renderable(Component):
     mesh_id: str
     material: str
 

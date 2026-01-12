@@ -11,8 +11,6 @@ def smooth_follow_system(world: World, dt: float) -> None:
     Lerps entities towards their target position.
     """
     for eid, trans, follow in world.join(Transform, SmoothFollow):
-        assert isinstance(trans, Transform) and isinstance(follow, SmoothFollow)
-
         target_trans = world.component(follow.target, Transform)
         if not target_trans:
             continue

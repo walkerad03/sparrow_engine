@@ -60,26 +60,26 @@ class Renderer:
             (1, 1), 4, data=bytes([128, 128, 255, 255])
         )
 
-        self.mesh_prog = self.shaders.get("gbuffer_mesh").program
+        mesh_prog = self.shaders.get("gbuffer_mesh").program
 
-        self.light_prog = self.shaders.get("point_light").program
-        self.light_vao = ctx.ctx.vertex_array(
-            self.light_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
+        light_prog = self.shaders.get("point_light").program
+        light_vao = ctx.ctx.vertex_array(
+            light_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
         )
 
-        self.composite_prog = self.shaders.get("composite").program
-        self.composite_vao = ctx.ctx.vertex_array(
-            self.composite_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
+        composite_prog = self.shaders.get("composite").program
+        composite_vao = ctx.ctx.vertex_array(
+            composite_prog, [(ctx.quad_buffer, "2f 2f", "in_vert", "in_uv")]
         )
 
-        self.scene_tex = ctx.ctx.texture(ctx.logical_res, 4)
-        self.scene_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
-        self.scene_fbo = ctx.ctx.framebuffer(color_attachments=[self.scene_tex])
+        scene_tex = ctx.ctx.texture(ctx.logical_res, 4)
+        scene_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        scene_fbo = ctx.ctx.framebuffer(color_attachments=[scene_tex])
 
         self.render_graph = RenderGraph()
         self.render_graph.add_pass(
             GBufferPass(
-                mesh_prog=self.mesh_prog,
+                mesh_prog=mesh_prog,
                 set_uniform=self._set,
                 get_texture=self.get_texture,
             )
@@ -87,23 +87,23 @@ class Renderer:
 
         self.render_graph.add_pass(
             LightingPass(
-                light_prog=self.light_prog,
-                light_vao=self.light_vao,
+                light_prog=light_prog,
+                light_vao=light_vao,
                 set_uniform=self._set,
             )
         )
 
         self.render_graph.add_pass(
             PostProcessPass(
-                composite_prog=self.composite_prog,
-                composite_vao=self.composite_vao,
+                composite_prog=composite_prog,
+                composite_vao=composite_vao,
                 set_uniform=self._set,
             )
         )
 
         self.frame = FrameResources(
             gbuffer=self.gbuffer,
-            scene_fbo=self.scene_fbo,
+            scene_fbo=scene_fbo,
         )
 
     def _set(self, prog: moderngl.Program, name: str, value: Any) -> None:
