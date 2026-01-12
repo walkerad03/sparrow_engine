@@ -24,6 +24,7 @@ def build_draw_list_system(world: World) -> None:
 
     for eid, light, transform in world.join(PointLight, Transform):
         item = DrawLight(
+            eid=eid,
             position=transform.pos,
             color=(
                 *light.color,

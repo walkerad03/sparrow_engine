@@ -1,19 +1,16 @@
 #version 460 core
-
 in vec3 in_pos;
 in vec2 in_uv;
 
-uniform mat4 u_view_proj;
 uniform mat4 u_model;
+uniform mat4 u_light_view_proj;
 
-out vec2 v_uv;
 out vec3 v_world_pos;
+out vec2 v_uv;
 
 void main() {
-    v_uv = in_uv;
-
     vec4 wp = u_model * vec4(in_pos, 1.0);
     v_world_pos = wp.xyz;
-
-    gl_Position = u_view_proj * wp;
+    v_uv = in_uv;
+    gl_Position = u_light_view_proj * wp;
 }

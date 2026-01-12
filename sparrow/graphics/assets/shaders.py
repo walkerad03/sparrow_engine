@@ -14,23 +14,28 @@ class ShaderLibrary:
     def __init__(self, ctx: moderngl.Context):
         self._ctx = ctx
         self._programs: Dict[str, ShaderProgram] = {}
-        self._sources: Dict[str, tuple[Path, Path]] = {}
+        self._sources: Dict[str, tuple[Path, Path, Path | None]] = {}
 
-    def register_engine_shader(self, key: str, vert: Path, frag: Path) -> None:
-        self._sources[key] = (vert, frag)
+    def register_engine_shader(
+        self, key: str, vert: Path, frag: Path, geom: Path | None = None
+    ) -> None:
+        self._sources[key] = (vert, frag, geom)
 
-    def register_override(self, key: str, vert: Path, frag: Path) -> None:
-        self._sources[key] = (vert, frag)
+    def register_override(
+        self, key: str, vert: Path, frag: Path, geom: Path | None = None
+    ) -> None:
+        self._sources[key] = (vert, frag, geom)
         if key in self._programs:
             del self._programs[key]  # force recompile
 
     def get(self, key: str) -> ShaderProgram:
         if key not in self._programs:
-            vert, frag = self._sources[key]
+            vert, frag, geom = self._sources[key]
             self._programs[key] = ShaderProgram(
                 program=self._ctx.program(
                     vertex_shader=vert.read_text(),
                     fragment_shader=frag.read_text(),
+                    geometry_shader=geom.read_text() if geom else None,
                 )
             )
         return self._programs[key]

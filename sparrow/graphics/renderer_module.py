@@ -18,6 +18,7 @@ from sparrow.graphics.renderer.graph import RenderContext, RenderGraph
 from sparrow.graphics.renderer.passes.gbuffer import GBufferPass
 from sparrow.graphics.renderer.passes.lighting import LightingPass
 from sparrow.graphics.renderer.passes.post import PostProcessPass
+from sparrow.graphics.renderer.passes.voxel import VoxelPass
 from sparrow.graphics.systems.build_draw_list import build_draw_list_system
 from sparrow.graphics.systems.sprite_to_renderable import sprite_to_renderable_system
 
@@ -42,6 +43,19 @@ class Renderer:
         )
 
         self.shaders.register_engine_shader(
+            "voxelize",
+            ENGINE_SHADER_DIR / "voxel" / "voxelize.vert",
+            ENGINE_SHADER_DIR / "voxel" / "voxelize.frag",
+            ENGINE_SHADER_DIR / "voxel" / "voxelize.geom",
+        )
+
+        self.shaders.register_engine_shader(
+            "shadow",
+            ENGINE_SHADER_DIR / "lighting" / "shadow.vert",
+            ENGINE_SHADER_DIR / "lighting" / "shadow.frag",
+        )
+
+        self.shaders.register_engine_shader(
             "point_light",
             ENGINE_SHADER_DIR / "lighting" / "point_light.vert",
             ENGINE_SHADER_DIR / "lighting" / "point_light.frag",
@@ -61,6 +75,24 @@ class Renderer:
         )
 
         mesh_prog = self.shaders.get("gbuffer_mesh").program
+
+        vox_res = (128, 128, 64)
+
+        vox_albedo_occ = self.ctx.ctx.texture3d(vox_res, 4, dtype="u1")
+        vox_albedo_occ.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+        vox_albedo_occ.repeat_x = False
+        vox_albedo_occ.repeat_y = False
+        vox_albedo_occ.repeat_z = False
+
+        vox_normal = self.ctx.ctx.texture3d(vox_res, 4, dtype="f2")
+        vox_normal.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+        vox_normal.repeat_x = False
+        vox_normal.repeat_y = False
+        vox_normal.repeat_z = False
+
+        voxel_prog = self.shaders.get("voxelize").program
+
+        shadow_prog = self.shaders.get("shadow").program
 
         light_prog = self.shaders.get("point_light").program
         light_vao = ctx.ctx.vertex_array(
@@ -86,9 +118,19 @@ class Renderer:
         )
 
         self.render_graph.add_pass(
+            VoxelPass(
+                prog=voxel_prog,
+                set_uniform=self._set,
+                get_texture=self.get_texture,
+                world_size=(512.0, 512.0, 256.0),
+            )
+        )
+
+        self.render_graph.add_pass(
             LightingPass(
                 light_prog=light_prog,
                 light_vao=light_vao,
+                shadow_prog=shadow_prog,
                 set_uniform=self._set,
             )
         )
@@ -104,6 +146,9 @@ class Renderer:
         self.frame = FrameResources(
             gbuffer=self.gbuffer,
             scene_fbo=scene_fbo,
+            vox_albedo_occ=vox_albedo_occ,
+            vox_normal=vox_normal,
+            vox_res=vox_res,
         )
 
     def _set(self, prog: moderngl.Program, name: str, value: Any) -> None:

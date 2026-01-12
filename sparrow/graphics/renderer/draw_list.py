@@ -18,6 +18,7 @@ class DrawItem:
 
 @dataclass(slots=True)
 class DrawLight:
+    eid: int
     position: Vector3
     color: tuple[float, float, float, float]
     radius: float

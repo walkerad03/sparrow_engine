@@ -54,6 +54,7 @@ class GBufferPass:
             tex.use(location=0)
             self._set(self.mesh_prog, "u_albedo", 0)
 
-            vao.render(mode=moderngl.TRIANGLE_STRIP)
+            assert mesh.vertex_count is not None
+            vao.render(mode=mesh.mode, vertices=mesh.vertex_count)
 
         rc.frame.gbuffer.generate_mipmaps()
