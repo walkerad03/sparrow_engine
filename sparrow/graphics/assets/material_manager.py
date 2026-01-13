@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
 
 from sparrow.graphics.util.ids import MaterialId, TextureId
 
@@ -10,7 +10,7 @@ from sparrow.graphics.util.ids import MaterialId, TextureId
 @dataclass(slots=True)
 class Material:
     """
-    Minimal deferred material.
+    Minimal deferred/forward material.
 
     For a starter deferred pipeline:
         - base_color texture and factor
@@ -31,12 +31,16 @@ class Material:
 class MaterialManager:
     """Stores materials and provides binding plans for passes."""
 
-    def __init__(self) -> None: ...
+    def __init__(self) -> None:
+        self._materials: Dict[MaterialId, Material] = {}
 
     def create(self, material_id: MaterialId, material: Material) -> None:
         """Register or replace a material."""
-        ...
+        self._materials[material_id] = material
 
     def get(self, material_id: MaterialId) -> Material:
         """Get a material by id."""
-        raise NotImplementedError
+        try:
+            return self._materials[material_id]
+        except KeyError:
+            raise KeyError(f"Material '{material_id}' not found")

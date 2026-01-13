@@ -1,27 +1,27 @@
 # sparrow/graphics/renderer/deferred_renderer.py
 from __future__ import annotations
 
+import struct
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 import moderngl
 
-from sparrow.graphics.assets.material_manager import MaterialManager
+from sparrow.graphics.assets.material_manager import Material, MaterialManager
 from sparrow.graphics.assets.mesh_manager import MeshManager
 from sparrow.graphics.assets.texture_manager import TextureManager
+from sparrow.graphics.assets.types import MeshData, VertexLayout
 from sparrow.graphics.debug.dump import dump_render_graph_state
 from sparrow.graphics.ecs.frame_submit import RenderFrameInput
 from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.compilation import compile_render_graph
 from sparrow.graphics.graph.pass_base import RenderServices
 from sparrow.graphics.graph.render_graph import CompiledRenderGraph
-from sparrow.graphics.graph.resources import TextureDesc
-from sparrow.graphics.passes.hdr_clear import HdrClearPass
-from sparrow.graphics.passes.tonemap import TonemapPass
+from sparrow.graphics.passes.forward_unlit import ForwardUnlitPass
 from sparrow.graphics.renderer.settings import DeferredRendererSettings
 from sparrow.graphics.shaders.shader_manager import ShaderManager
-from sparrow.graphics.util.ids import PassId, ResourceId
+from sparrow.graphics.util.ids import MaterialId, MeshId, PassId
 
 EventSink = Callable[[object], None]  # ECS event bus: emit(event)
 
@@ -62,36 +62,20 @@ class DeferredRenderer:
 
         builder = RenderGraphBuilder()
 
-        hdr_color = ResourceId("hdr_color")
-        builder.add_texture(
-            hdr_color,
-            TextureDesc(
-                width=1280,  # TODO: Resize support
-                height=720,
-                components=4,
-                dtype="f2",
-                samples=0,
-                label="HDR Color",
-            ),
+        vertices = struct.pack("6f", -0.6, -0.6, 0.6, -0.6, 0.0, 0.6)
+        layout = VertexLayout(attributes=["in_pos"], format="2f", stride_bytes=8)
+        tmesh_id = MeshId("triangle")
+        triangle_mesh = MeshData(vertices=vertices, indices=None, vertex_layout=layout)
+        self._mesh_mgr.create(tmesh_id, triangle_mesh, label="Test Triangle")
+
+        mat_id = MaterialId("mat_red")
+        self._material_mgr.create(
+            mat_id,
+            Material(base_color_factor=(1.0, 0.0, 0.0, 1.0)),
         )
 
-        pid = PassId("hdr_clear")
-        builder.add_pass(
-            pid,
-            HdrClearPass(
-                pass_id=pid,
-                target=hdr_color,
-            ),
-        )
-
-        pid = PassId("tonemap")
-        builder.add_pass(
-            pid,
-            TonemapPass(
-                pass_id=pid,
-                hdr_input=hdr_color,
-            ),
-        )
+        pid = PassId("forward")
+        builder.add_pass(pid, ForwardUnlitPass(pass_id=pid, mesh_id=tmesh_id))
 
         self._activate_builder(builder, reason="initial")
 

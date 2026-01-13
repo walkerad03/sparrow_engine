@@ -22,7 +22,7 @@ import moderngl
 import numpy as np
 import pygame
 
-from sparrow.graphics.ecs.frame_submit import CameraData, RenderFrameInput
+from sparrow.graphics.ecs.frame_submit import CameraData, DrawItem, RenderFrameInput
 from sparrow.graphics.renderer.deferred_renderer import DeferredRenderer
 from sparrow.graphics.renderer.settings import (
     DeferredRendererSettings,
@@ -58,6 +58,10 @@ def _handle_pygame_events() -> None:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit(0)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit(0)
 
 
 def main() -> None:
@@ -68,7 +72,7 @@ def main() -> None:
     pygame.init()
     pygame.display.set_mode(
         (window_width, window_height),
-        pygame.OPENGL | pygame.DOUBLEBUF,
+        pygame.OPENGL | pygame.DOUBLEBUF | pygame.FULLSCREEN | pygame.SCALED,
     )
 
     ctx = moderngl.create_context(460)
@@ -110,7 +114,14 @@ def main() -> None:
             frame_index=state.frame_index,
             dt_seconds=dt,
             camera=cam,
-            draws=[],
+            draws=[
+                DrawItem(
+                    "triangle",
+                    "mat_red",
+                    np.eye(4, dtype=np.float32),
+                    1,
+                )
+            ],
             point_lights=[],
             debug_flags={"mode_blit": state.mode == "blit"},
             viewport_width=window_width,
