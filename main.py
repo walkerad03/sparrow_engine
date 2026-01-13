@@ -24,7 +24,6 @@ import numpy as np
 import pygame
 from numpy.typing import NDArray
 
-from sparrow.graphics.api.renderer_api import RendererAPI
 from sparrow.graphics.assets.material_manager import Material
 from sparrow.graphics.assets.obj_loader import load_obj
 from sparrow.graphics.debug.profiler import profile
@@ -34,17 +33,16 @@ from sparrow.graphics.ecs.frame_submit import (
     LightPoint,
     RenderFrameInput,
 )
-from sparrow.graphics.graph.resources import FramebufferDesc, TextureDesc
-from sparrow.graphics.passes.deferred_lighting import DeferredLightingPass
-from sparrow.graphics.passes.gbuffer import GBufferPass
-from sparrow.graphics.passes.tonemap import TonemapPass
+from sparrow.graphics.graph.builder import RenderGraphBuilder
+from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
+from sparrow.graphics.pipelines.forward import build_forward_pipeline
 from sparrow.graphics.renderer.deferred_renderer import DeferredRenderer
 from sparrow.graphics.renderer.settings import (
     DeferredRendererSettings,
     PresentScaleMode,
     ResolutionSettings,
 )
-from sparrow.graphics.util.ids import MaterialId, MeshId, PassId, ResourceId
+from sparrow.graphics.util.ids import MaterialId, MeshId
 
 
 @dataclass(slots=True)
@@ -182,6 +180,13 @@ def _handle_pygame_events() -> None:
                 sys.exit(0)
 
 
+PIPELINES = {
+    "deferred": build_deferred_pipeline,
+    "forward": build_forward_pipeline,
+    # "blit": build_blit_pipeline
+}
+
+
 @profile(out_dir=Path(".debug"), enabled=True)
 def main() -> None:
     """Main entrypoint for the minimal renderer test app."""
@@ -199,7 +204,7 @@ def main() -> None:
     gl_version = ctx.version_code
     print(f"OpenGL version {str(gl_version)[0]}.{str(gl_version)[1:]}")
 
-    state = AppState(mode="blit")
+    state = AppState(mode="deferred")
 
     settings = DeferredRendererSettings(
         resolution=ResolutionSettings(
@@ -214,6 +219,14 @@ def main() -> None:
 
     renderer = DeferredRenderer(ctx, settings=settings, emit_event=None)
     renderer.initialize()
+
+    def configure_graph(builder: RenderGraphBuilder):
+        if state.mode in PIPELINES:
+            PIPELINES[state.mode](builder, window_width, window_height)
+        else:
+            raise ValueError(f"Unknown mode {state.mode}")
+
+    renderer.rebuild_graph(configure_graph, reason=f"mode_{state.mode}")
 
     stormtrooper = MeshId("stormtrooper")
     renderer.mesh_manager.create(
@@ -240,118 +253,6 @@ def main() -> None:
             1,
         )
     ]
-
-    api = RendererAPI(renderer)
-    edit = api.begin_graph_edit(reason="set_default_pipeline")
-
-    edit.add_texture(
-        ResourceId("g_albedo"),
-        TextureDesc(
-            window_width,
-            window_height,
-            components=4,
-            dtype="f2",
-            label="GBuffer Albedo",
-        ),
-    )
-    edit.add_texture(
-        ResourceId("g_normal"),
-        TextureDesc(
-            window_width,
-            window_height,
-            components=4,
-            dtype="f2",
-            label="GBuffer Normal",
-        ),
-    )
-    edit.add_texture(
-        ResourceId("g_orm"),
-        TextureDesc(
-            window_width,
-            window_height,
-            components=4,
-            dtype="f2",
-            label="GBuffer ORM",
-        ),
-    )
-    edit.add_texture(
-        ResourceId("g_depth"),
-        TextureDesc(
-            window_width,
-            window_height,
-            components=1,
-            dtype="f4",
-            label="GBuffer Depth",
-            depth=True,
-        ),
-    )
-
-    edit.add_framebuffer(
-        ResourceId("gbuffer_fbo"),
-        FramebufferDesc(
-            color_attachments=(
-                ResourceId("g_albedo"),
-                ResourceId("g_normal"),
-                ResourceId("g_orm"),
-            ),
-            depth_attachment=ResourceId("g_depth"),
-            label="GBuffer FBO",
-        ),
-    )
-
-    edit.add_pass(
-        PassId("gbuffer"),
-        GBufferPass(
-            pass_id=PassId("gbuffer"),
-            g_albedo=ResourceId("g_albedo"),
-            g_normal=ResourceId("g_normal"),
-            g_orm=ResourceId("g_orm"),
-            g_depth=ResourceId("g_depth"),
-        ),
-    )
-
-    edit.add_texture(
-        ResourceId("light_accum"),
-        TextureDesc(
-            window_width,
-            window_height,
-            components=4,
-            dtype="f2",
-            label="Light Accumulation",
-        ),
-    )
-
-    edit.add_framebuffer(
-        ResourceId("light_fbo"),
-        FramebufferDesc(
-            color_attachments=(ResourceId("light_accum"),),
-            depth_attachment=None,
-            label="Light Accum FBO",
-        ),
-    )
-
-    edit.add_pass(
-        PassId("deferred_lighting"),
-        DeferredLightingPass(
-            pass_id=PassId("deferred_lighting"),
-            out_fbo=ResourceId("light_fbo"),
-            light_accum=ResourceId("light_accum"),
-            g_albedo=ResourceId("g_albedo"),
-            g_normal=ResourceId("g_normal"),
-            g_orm=ResourceId("g_orm"),
-            g_depth=ResourceId("g_depth"),
-        ),
-    )
-
-    edit.add_pass(
-        PassId("tonemap"),
-        TonemapPass(
-            pass_id=PassId("tonemap"),
-            hdr_input=ResourceId("light_accum"),
-        ),
-    )
-
-    edit.commit()
 
     # Static camera data
     eye = np.array([3.0, 1.0, 0.0], dtype=np.float32)

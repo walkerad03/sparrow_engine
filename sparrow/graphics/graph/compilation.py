@@ -34,7 +34,11 @@ def _fbo_rid(pid: PassId) -> ResourceId:
 
 
 def _all_declared_resources(builder: RenderGraphBuilder) -> Set[ResourceId]:
-    return set(builder.textures.keys()) | set(builder.buffers.keys())
+    return (
+        set(builder.textures.keys())
+        | set(builder.buffers.keys())
+        | set(builder.framebuffers.keys())
+    )
 
 
 def _uses_for_pass(info: PassBuildInfo) -> Sequence[PassResourceUse]:

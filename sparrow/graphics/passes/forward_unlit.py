@@ -46,8 +46,8 @@ class ForwardUnlitPass(RenderPass):
     """
 
     pass_id: PassId
-
     color_target: Optional[ResourceId] = None
+    depth_target: Optional[ResourceId] = None
 
     _program: moderngl.Program | None = None
     _u_view_proj: moderngl.Uniform | None = None
@@ -60,6 +60,9 @@ class ForwardUnlitPass(RenderPass):
 
         if self.color_target:
             writes.append(PassResourceUse(self.color_target, "write", "color"))
+
+        if self.depth_target:
+            writes.append(PassResourceUse(self.depth_target, "write", "depth"))
 
         return PassBuildInfo(
             pass_id=self.pass_id,
@@ -146,10 +149,11 @@ class ForwardUnlitPass(RenderPass):
             gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
             fbo.clear()
 
+        gl.enable(moderngl.DEPTH_TEST)
         gl.disable(moderngl.BLEND)
 
         assert self._u_view_proj is not None
-        self._u_view_proj.write(frame.camera.view_proj.tobytes())
+        self._u_view_proj.write(frame.camera.view_proj.T.tobytes())
 
         assert self._u_model is not None
         assert self._u_base_color is not None
@@ -160,7 +164,7 @@ class ForwardUnlitPass(RenderPass):
 
             mat: Material = services.material_manager.get(mat_id)
 
-            self._u_model.write(di.model.tobytes())
+            self._u_model.write(di.model.T.tobytes())
             self._u_base_color.value = mat.base_color_factor
 
             vao = services.mesh_manager.vao_for(mesh_id, self._program)
