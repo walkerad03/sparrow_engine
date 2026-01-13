@@ -1,132 +1,131 @@
-import argparse
-import ctypes
-import sys
-from pathlib import Path
+"""
+Minimal renderer testing framework.
 
+Run mode:
+    - "blit": just show a generated gradient texture (tests graph, textures, tonemap)
+    - "forward": draw a triangle (tests mesh path)
+    - "deferred": run gbuffer + lighting (tests default deferred pipeline)
+
+Expected keys:
+    - ESC: quit
+    - R: rebuild graph (exercise pipeline modification API)
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+from dataclasses import dataclass
+from typing import Literal
+
+import moderngl
+import numpy as np
 import pygame
 
-from game.constants import LOGICAL_RESOLUTION, PHYSICS_FPS, WINDOW_SCALE
-from game.entities.player import create_player
-from game.scenes.dungeon import DungeonScene
-from game.systems.screen_fade import screen_fade_system
-from game.systems.smooth_follow import smooth_follow_system
-from sparrow.core.world import World
-from sparrow.graphics.context import GraphicsContext
-from sparrow.graphics.renderer.draw_list import RenderDrawList
-from sparrow.graphics.renderer_module import Renderer
-from sparrow.input.context import InputContext
-from sparrow.input.handler import InputHandler
-from sparrow.net import transport
-from sparrow.net.components import NetworkIdentity, NetworkInput
-from sparrow.net.network import network_system
-from sparrow.net.protocol import Protocol
-from sparrow.net.resources import (
-    ClientState,
-    NetworkHardware,
-    PrefabRegistry,
-    ServerState,
+from sparrow.graphics.ecs.frame_submit import CameraData, RenderFrameInput
+from sparrow.graphics.renderer.deferred_renderer import DeferredRenderer
+from sparrow.graphics.renderer.settings import (
+    DeferredRendererSettings,
+    PresentScaleMode,
+    ResolutionSettings,
 )
-from sparrow.systems.hierarchy import hierarchy_system
-from sparrow.types import EntityId
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Sparrow Test Game")
-    parser.add_argument("--host", action="store_true", help="Start as Server/Host")
-    parser.add_argument("--join", type=str, help="Join a server (IP Address)")
-    args = parser.parse_args()
+@dataclass(slots=True)
+class AppState:
+    mode: Literal["blit", "forward", "deferred"]
+    frame_index: int = 0
+    last_time: float = time.perf_counter()
 
-    if sys.platform == "win32":
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except AttributeError:
-            pass
 
-    ctx = GraphicsContext(LOGICAL_RESOLUTION, WINDOW_SCALE)
-    asset_path = Path(__file__).parent / "sparrow" / "graphics" / "shaders"
-    renderer = Renderer(ctx, asset_path)
+def make_dummy_camera(w: int, h: int) -> CameraData:
+    """Create a simple camera; to be replaced with math utils later."""
+    view = np.eye(4, dtype=np.float32)
+    proj = np.eye(4, dtype=np.float32)
+    vp = proj @ view
+    return CameraData(
+        view=view,
+        proj=proj,
+        view_proj=vp,
+        position_ws=np.array([0.0, 0.0, 2.0], dtype=np.float32),
+        near=0.1,
+        far=100.0,
+    )
 
-    world = World()
 
-    world.add_resource(RenderDrawList.empty())
+def _handle_pygame_events() -> None:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit(0)
 
-    port = 5000 if args.host else 0
-    raw_sock = transport.create_socket(port)
-    world.add_resource(NetworkHardware(raw_sock, port))
 
-    if args.host:
-        print("[GAME] Starting as HOST...")
-        pygame.display.set_caption("Sparrow - HOST")
-        world.add_resource(ServerState())
-    elif args.join:
-        print(f"[GAME] Joining {args.join}...")
-        pygame.display.set_caption("Sparrow - CLIENT")
-        world.add_resource(ClientState(server_addr=(args.join, 5000)))
+def main() -> None:
+    """Main entrypoint for the minimal renderer test app."""
+    # 1) Create window + ModernGL context.
+    window_width, window_height = 1280, 720
 
-        print("[NET] Sending Handshake...")
-        transport.send_packet(raw_sock, Protocol.pack_connect(), (args.join, 5000))
-    else:
-        print("[GAME] No args provided, defaulting to HOST.")
-        pygame.display.set_caption("Sparrow - SINGLE PLAYER")
-        world.add_resource(ServerState())
+    pygame.init()
+    pygame.display.set_mode(
+        (window_width, window_height),
+        pygame.OPENGL | pygame.DOUBLEBUF,
+    )
 
-    registry = PrefabRegistry()
+    ctx = moderngl.create_context(460)
+    gl_version = ctx.version_code
+    print(f"OpenGL version {str(gl_version)[0]}.{str(gl_version)[1:]}")
 
-    def spawn_player_wrapper(world: World, eid: EntityId, **kwargs):
-        x: int = kwargs.get("x", 100)
-        y: int = kwargs.get("y", 100)
-        z: int = kwargs.get("z", 100)
-        net_id = kwargs.get("net_id", 0)
-        owner_id = kwargs.get("owner_id", -1)
-        create_player(world, x, y, z, eid=eid)
+    state = AppState(mode="blit")
 
-        world.add_component(eid, NetworkInput())
-        world.add_component(eid, NetworkIdentity(net_id, owner_id))
+    settings = DeferredRendererSettings(
+        resolution=ResolutionSettings(
+            logical_width=320,
+            logical_height=320,
+            scale_mode=PresentScaleMode.INTEGER_FIT,
+        ),
+        hdr=True,
+        msaa_samples=1,
+        enable_debug_views=False,
+    )
 
-    registry.prefabs[1] = spawn_player_wrapper
-    world.add_resource(registry)
+    renderer = DeferredRenderer(ctx, settings=settings, emit_event=None)
+    renderer.initialize()
 
-    input_handler = InputHandler()
-    world.add_resource(input_handler)
-
-    base_ctx = InputContext("default")
-    base_ctx.bind(pygame.K_w, "UP")
-    base_ctx.bind(pygame.K_s, "DOWN")
-    base_ctx.bind(pygame.K_a, "LEFT")
-    base_ctx.bind(pygame.K_d, "RIGHT")
-    base_ctx.bind(pygame.K_SPACE, "FIRE")
-
-    input_handler.push_context(base_ctx)
-
-    scene = DungeonScene(world, renderer)
-    scene.enter()
-
-    clock = pygame.time.Clock()
     running = True
-
     while running:
-        dt = clock.tick(PHYSICS_FPS) / 1000.0
+        _handle_pygame_events()
 
-        # Input Handling
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                running = False
-            input_handler.process_event(event)
+        now = time.perf_counter()
+        dt = now - state.last_time
+        state.last_time = now
+        state.frame_index += 1
 
-        network_system(world)
+        # 2) Poll input, window events, resize handling.
+        # If resized, update renderer settings and rebuild graph or trigger resize path.
 
-        scene.update(dt)
+        cam = make_dummy_camera(window_width, window_height)
 
-        screen_fade_system(world, dt, renderer)
-        hierarchy_system(world)
-        smooth_follow_system(world, dt)
+        # 3) Build a frame input. For early phases, lights and draws can be empty.
+        frame = RenderFrameInput(
+            frame_index=state.frame_index,
+            dt_seconds=dt,
+            camera=cam,
+            draws=[],
+            point_lights=[],
+            debug_flags={"mode_blit": state.mode == "blit"},
+            viewport_width=window_width,
+            viewport_height=window_height,
+        )
 
-        scene.render()
+        renderer.render_frame(frame)
 
-    pygame.quit()
-    sys.exit()
+        # 4) Present buffers.
+        pygame.display.flip()
+
+        # 5) Optional: throttle
+        # time.sleep(0.001)
+
+    # renderer.shutdown if it exists
 
 
 if __name__ == "__main__":
