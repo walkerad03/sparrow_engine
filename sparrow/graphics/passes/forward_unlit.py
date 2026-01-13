@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Mapping, Optional
 
 import moderngl
 
@@ -10,11 +10,14 @@ from sparrow.graphics.assets.material_manager import Material
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
+    PassResourceUse,
     RenderPass,
     RenderServices,
 )
 from sparrow.graphics.graph.resources import (
+    FramebufferResource,
     GraphResource,
+    expect_resource,
 )
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
@@ -44,7 +47,7 @@ class ForwardUnlitPass(RenderPass):
 
     pass_id: PassId
 
-    mesh_id: MeshId = MeshId("triangle")
+    color_target: Optional[ResourceId] = None
 
     _program: moderngl.Program | None = None
     _u_view_proj: moderngl.Uniform | None = None
@@ -53,11 +56,16 @@ class ForwardUnlitPass(RenderPass):
     _fbo_rid: ResourceId | None = None
 
     def build(self) -> PassBuildInfo:
+        writes: list[PassResourceUse] = []
+
+        if self.color_target:
+            writes.append(PassResourceUse(self.color_target, "write", "color"))
+
         return PassBuildInfo(
             pass_id=self.pass_id,
             name="Forward (Bring-up)",
             reads=[],
-            writes=[],
+            writes=writes,
         )
 
     def on_graph_compiled(
@@ -104,7 +112,14 @@ class ForwardUnlitPass(RenderPass):
             ]
             raise RuntimeError(f"ForwardPass missing required uniforms: {missing}")
 
-        self._fbo_rid = None
+        if self.color_target:
+            self._fbo_rid = ResourceId(f"fbo:{self.pass_id}")
+            if self._fbo_rid not in resources:
+                raise RuntimeError(
+                    f"ForwardPass expected framebuffer resource '{self._fbo_rid}' for pass '{self.pass_id}'."
+                )
+        else:
+            self._fbo_rid = None
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         if self._program is None:
@@ -114,9 +129,22 @@ class ForwardUnlitPass(RenderPass):
         services = exec_ctx.services
         frame = exec_ctx.frame
 
-        gl.screen.use()
-        gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
-        gl.clear()
+        if self.color_target is None:
+            gl.screen.use()
+            gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
+            gl.clear()
+        else:
+            assert self._fbo_rid
+            fbo_res = expect_resource(
+                exec_ctx.resources,
+                self._fbo_rid,
+                FramebufferResource,
+            )
+            fbo = fbo_res.handle
+            fbo.use()
+
+            gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
+            fbo.clear()
 
         gl.disable(moderngl.BLEND)
 

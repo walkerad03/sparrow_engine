@@ -1,27 +1,23 @@
 # sparrow/graphics/renderer/deferred_renderer.py
 from __future__ import annotations
 
-import struct
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 import moderngl
 
-from sparrow.graphics.assets.material_manager import Material, MaterialManager
+from sparrow.graphics.assets.material_manager import MaterialManager
 from sparrow.graphics.assets.mesh_manager import MeshManager
 from sparrow.graphics.assets.texture_manager import TextureManager
-from sparrow.graphics.assets.types import MeshData, VertexLayout
 from sparrow.graphics.debug.dump import dump_render_graph_state
 from sparrow.graphics.ecs.frame_submit import RenderFrameInput
 from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.compilation import compile_render_graph
 from sparrow.graphics.graph.pass_base import RenderServices
 from sparrow.graphics.graph.render_graph import CompiledRenderGraph
-from sparrow.graphics.passes.forward_unlit import ForwardUnlitPass
 from sparrow.graphics.renderer.settings import DeferredRendererSettings
 from sparrow.graphics.shaders.shader_manager import ShaderManager
-from sparrow.graphics.util.ids import MaterialId, MeshId, PassId
 
 EventSink = Callable[[object], None]  # ECS event bus: emit(event)
 
@@ -53,38 +49,13 @@ class DeferredRenderer:
 
     def initialize(self) -> None:
         """Initialize managers and build the default render graph."""
-        self._shader_mgr = ShaderManager(
-            self.gl, include_paths=["sparrow/graphics/shaders"]
-        )
+        self._shader_mgr = ShaderManager(self.gl, include_paths=[])
         self._mesh_mgr = MeshManager(self.gl)
         self._material_mgr = MaterialManager()
         self._texture_mgr = TextureManager(self.gl)
 
         builder = RenderGraphBuilder()
-
-        vertices = struct.pack("6f", -0.6, -0.6, 0.6, -0.6, 0.0, 0.6)
-        layout = VertexLayout(attributes=["in_pos"], format="2f", stride_bytes=8)
-        tmesh_id = MeshId("triangle")
-        triangle_mesh = MeshData(vertices=vertices, indices=None, vertex_layout=layout)
-        self._mesh_mgr.create(tmesh_id, triangle_mesh, label="Test Triangle")
-
-        mat_id = MaterialId("mat_red")
-        self._material_mgr.create(
-            mat_id,
-            Material(base_color_factor=(1.0, 0.0, 0.0, 1.0)),
-        )
-
-        pid = PassId("forward")
-        builder.add_pass(pid, ForwardUnlitPass(pass_id=pid, mesh_id=tmesh_id))
-
         self._activate_builder(builder, reason="initial")
-
-        assert self._graph
-        dump_render_graph_state(
-            graph=self._graph,
-            gl=self.gl,
-            header="POST-COMPILE GRAPH STATE",
-        )
 
     def rebuild_graph(
         self,
@@ -118,7 +89,7 @@ class DeferredRenderer:
         """
         Clone current RenderGraphBuilder State.
         """
-        assert self._builder is RenderGraphBuilder
+        assert isinstance(self._builder, RenderGraphBuilder)
         return deepcopy(self._builder)
 
     def _activate_builder(self, builder: RenderGraphBuilder, *, reason: str) -> None:
@@ -144,6 +115,12 @@ class DeferredRenderer:
 
         self._builder = builder
         self._graph = graph
+
+        dump_render_graph_state(
+            graph=self._graph,
+            gl=self.gl,
+            header="POST-COMPILE GRAPH STATE",
+        )
 
     @property
     def shader_manager(self) -> ShaderManager:

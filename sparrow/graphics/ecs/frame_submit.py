@@ -40,7 +40,7 @@ class DrawItem:
 
     mesh_id: str
     material_id: str
-    model: np.ndarray  # (4,4)
+    model: np.ndarray  # model transform matrix (4,4)
     entity_id: int
     sort_key: int = 0  # optional packed sort key
 
