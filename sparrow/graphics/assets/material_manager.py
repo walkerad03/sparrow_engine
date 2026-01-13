@@ -34,6 +34,11 @@ class MaterialManager:
     def __init__(self) -> None:
         self._materials: Dict[MaterialId, Material] = {}
 
+        self.create(
+            MaterialId("engine.default"),
+            Material(base_color_factor=(1.0, 1.0, 1.0, 1.0)),
+        )
+
     def create(self, material_id: MaterialId, material: Material) -> None:
         """Register or replace a material."""
         self._materials[material_id] = material

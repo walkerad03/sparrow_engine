@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Mapping, Protocol, Tuple, Type, TypeVar, cast
+from typing import Mapping, Protocol, Sequence, Tuple, Type, TypeVar, cast
 
 import moderngl
 
@@ -34,6 +34,7 @@ class TextureDesc:
     samples: int = 0  # 1+ for MSAA
     mipmaps: bool = False
     label: str = ""
+    depth: bool = False  # For depth textures
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,15 @@ class BufferDesc:
 
     size_bytes: int
     dynamic: bool = True
+    label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class FramebufferDesc:
+    """Declarative framebuffer specification."""
+
+    color_attachments: tuple[ResourceId, ...]
+    depth_attachment: ResourceId | None = None
     label: str = ""
 
 
@@ -77,6 +87,7 @@ class BufferResource(GraphResource):
 class FramebufferResource(GraphResource):
     """A graph-owned framebuffer built from attachments."""
 
+    desc: FramebufferDesc
     handle: moderngl.Framebuffer
     label: str
 
@@ -129,12 +140,18 @@ def allocate_texture(ctx: moderngl.Context, desc: TextureDesc) -> TextureResourc
         if desc.mipmaps and desc.samples != 0:
             raise ValueError("MSAA textures cannot have mipmaps")
 
-        tex = ctx.texture(
-            size=(desc.width, desc.height),
-            components=desc.components,
-            dtype=desc.dtype,
-            samples=desc.samples,
-        )
+        if desc.depth:
+            tex = ctx.depth_texture(
+                size=(desc.width, desc.height),
+                samples=desc.samples,
+            )
+        else:
+            tex = ctx.texture(
+                size=(desc.width, desc.height),
+                components=desc.components,
+                dtype=desc.dtype,
+                samples=desc.samples,
+            )
 
         if desc.mipmaps:
             tex.build_mipmaps()
@@ -166,7 +183,9 @@ def _tex_info(
 def allocate_framebuffer(
     ctx: moderngl.Context,
     *,
-    color_attachments: Iterable[TextureResource],
+    color_attachment_ids: Sequence[ResourceId],
+    color_attachments: Sequence[TextureResource],
+    depth_attachment_id: ResourceId | None = None,
     depth_attachment: TextureResource | None = None,
     label: str = "",
 ) -> FramebufferResource:
@@ -181,6 +200,8 @@ def allocate_framebuffer(
     Raises:
         ValueError: If attachment dimensions or sample counts mismatch.
     """
+    if len(color_attachment_ids) != len(color_attachments):
+        raise ValueError("color_attachment_ids must match color_attachments length")
 
     colors = [_assert_fbo_texture(tex.handle) for tex in color_attachments]
     depth = _assert_fbo_texture(depth_attachment.handle) if depth_attachment else None
@@ -205,4 +226,10 @@ def allocate_framebuffer(
 
     fbo = ctx.framebuffer(color_attachments=colors, depth_attachment=depth)
 
-    return FramebufferResource(handle=fbo, label=label or "Framebuffer")
+    fb_desc = FramebufferDesc(
+        color_attachments=tuple(color_attachment_ids),
+        depth_attachment=depth_attachment_id,
+        label=label or "Framebuffer",
+    )
+
+    return FramebufferResource(desc=fb_desc, handle=fbo, label=fb_desc.label)

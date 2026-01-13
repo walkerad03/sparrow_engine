@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from sparrow.graphics.graph.pass_base import RenderPass
-from sparrow.graphics.graph.resources import BufferDesc, TextureDesc
+from sparrow.graphics.graph.resources import BufferDesc, FramebufferDesc, TextureDesc
 from sparrow.graphics.util.ids import PassId, ResourceId
 
 
@@ -24,6 +24,7 @@ class RenderGraphBuilder:
 
     textures: Dict[ResourceId, TextureDesc] = field(default_factory=dict)
     buffers: Dict[ResourceId, BufferDesc] = field(default_factory=dict)
+    framebuffers: Dict[ResourceId, FramebufferDesc] = field(default_factory=dict)
     passes: Dict[PassId, RenderPass] = field(default_factory=dict)
 
     def add_texture(self, rid: ResourceId, desc: TextureDesc) -> None:
@@ -33,6 +34,10 @@ class RenderGraphBuilder:
     def add_buffer(self, rid: ResourceId, desc: BufferDesc) -> None:
         """Register or replace a buffer resource description."""
         self.buffers[rid] = desc
+
+    def add_framebuffer(self, rid: ResourceId, desc: FramebufferDesc) -> None:
+        """Register or replace a buffer resource description."""
+        self.framebuffers[rid] = desc
 
     def add_pass(self, pid: PassId, pass_obj: RenderPass) -> None:
         """Add a new pass. Raises if pid already exists (use replace_pass)."""
@@ -63,6 +68,10 @@ class RenderGraphBuilder:
 
         if rid in self.buffers:
             del self.buffers[rid]
+            return
+
+        if rid in self.framebuffers:
+            del self.framebuffers[rid]
             return
 
         raise KeyError(f"Resource '{rid}' does not exist")

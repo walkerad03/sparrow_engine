@@ -71,7 +71,7 @@ class TonemapPass(RenderPass):
         req = ShaderRequest(
             shader_id=ShaderId("tonemap"),
             stages=ShaderStages(
-                vertex="sparrow/graphics/shaders/default/tonemap_fullscreen.vert",
+                vertex="sparrow/graphics/shaders/default/tonemap.vert",
                 fragment="sparrow/graphics/shaders/default/tonemap.frag",
             ),
             label="Tonemap",

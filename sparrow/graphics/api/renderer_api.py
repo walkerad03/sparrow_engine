@@ -6,7 +6,7 @@ from typing import Callable, Optional
 
 from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.pass_base import RenderPass
-from sparrow.graphics.graph.resources import BufferDesc, TextureDesc
+from sparrow.graphics.graph.resources import BufferDesc, FramebufferDesc, TextureDesc
 from sparrow.graphics.renderer.deferred_renderer import DeferredRenderer
 from sparrow.graphics.util.ids import PassId, ResourceId
 
@@ -31,6 +31,10 @@ class GraphEdit:
     def add_buffer(self, rid: ResourceId, desc: BufferDesc) -> None:
         """Add or replace a buffer resource."""
         self._builder.add_buffer(rid, desc)
+
+    def add_framebuffer(self, rid: ResourceId, desc: FramebufferDesc) -> None:
+        """Add or replace a framebuffer resource."""
+        self._builder.add_framebuffer(rid, desc)
 
     def add_pass(self, pid: PassId, pass_obj: RenderPass) -> None:
         """Add a new pass."""

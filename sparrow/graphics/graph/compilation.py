@@ -231,7 +231,9 @@ def _allocate_pass_framebuffers(
         fbo = allocate_framebuffer(
             gl,
             color_attachments=color_tex,
+            color_attachment_ids=color_rids,
             depth_attachment=depth_tex,
+            depth_attachment_id=depth_rid,
             label=f"fbo:{pid}",
         )
         fbos[_fbo_rid(pid)] = fbo

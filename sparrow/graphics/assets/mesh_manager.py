@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import moderngl
 
+from sparrow.graphics.assets.obj_loader import load_obj
 from sparrow.graphics.assets.types import MeshData, VertexLayout
 from sparrow.graphics.util.ids import MeshId
 
@@ -27,6 +28,27 @@ class MeshManager:
     def __init__(self, gl: moderngl.Context) -> None:
         self._gl = gl
         self._meshes: Dict[MeshId, MeshHandle] = {}
+
+        self._load_engine_defaults()
+
+    def _load_engine_defaults(self) -> None:
+        self.create(
+            MeshId("engine.suzanne"),
+            load_obj("sparrow/graphics/meshes/default/suzanne.obj"),
+            label="Suzanne",
+        )
+
+        self.create(
+            MeshId("engine.cube"),
+            load_obj("sparrow/graphics/meshes/default/cube.obj"),
+            label="Cube",
+        )
+
+        self.create(
+            MeshId("engine.dense_icosphere"),
+            load_obj("sparrow/graphics/meshes/default/dense_icosphere.obj"),
+            label="Dense Icosphere",
+        )
 
     def create(self, mesh_id: MeshId, data: MeshData, *, label: str = "") -> MeshHandle:
         """Upload a mesh and store it under mesh_id."""
@@ -68,13 +90,53 @@ class MeshManager:
         if vao is not None:
             return vao
 
+        program_attribs: dict[str, moderngl.Attribute] = {}
+        for name in program:
+            member = program[name]
+            if isinstance(member, moderngl.Attribute):
+                program_attribs[name] = member
+
+        if not program_attribs:
+            raise RuntimeError("Program has no vertex attributes")
+
         layout = mesh.vertex_layout
+        format_parts = layout.format.split()
 
-        vao = self._gl.vertex_array(
-            program,
-            [(mesh.vbo, layout.format, *layout.attributes)],
-            index_buffer=mesh.ibo,
-        )
+        final_fmt_parts = []
+        final_attrs = []
 
+        for attr_name, fmt in zip(layout.attributes, format_parts):
+            if attr_name in program_attribs:
+                final_fmt_parts.append(fmt)
+                final_attrs.append(attr_name)
+            else:
+                size_bytes = _format_size(fmt)
+                final_fmt_parts.append(f"{size_bytes}x")
+
+        final_format_str = " ".join(final_fmt_parts)
+        content = [(mesh.vbo, final_format_str, *final_attrs)]
+
+        if not final_attrs:
+            raise RuntimeError(
+                f"No compatible vertex attributes between mesh '{mesh_id}' "
+                f"and program {id(program)}"
+            )
+
+        vao = self._gl.vertex_array(program, content)
         mesh.vao_cache[key] = vao
         return vao
+
+
+def _format_size(fmt: str) -> int:
+    # fmt examples: "3f", "2f", "4i"
+    count = int(fmt[:-1])
+    kind = fmt[-1]
+
+    if kind == "f":
+        return count * 4
+    if kind == "i":
+        return count * 4
+    if kind == "h":
+        return count * 2
+
+    raise ValueError(f"Unsupported vertex format: {fmt}")

@@ -1,35 +1,43 @@
 """
 Minimal renderer testing framework.
 
-Run mode:
+Run mode: (Not implemented yet)
     - "blit": just show a generated gradient texture (tests graph, textures, tonemap)
     - "forward": draw a triangle (tests mesh path)
     - "deferred": run gbuffer + lighting (tests default deferred pipeline)
 
 Expected keys:
     - ESC: quit
-    - R: rebuild graph (exercise pipeline modification API)
 """
 
 from __future__ import annotations
 
-import struct
+import math
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Literal
 
 import moderngl
 import numpy as np
 import pygame
+from numpy.typing import NDArray
 
 from sparrow.graphics.api.renderer_api import RendererAPI
 from sparrow.graphics.assets.material_manager import Material
-from sparrow.graphics.assets.types import MeshData, VertexLayout
-from sparrow.graphics.ecs.frame_submit import CameraData, DrawItem, RenderFrameInput
-from sparrow.graphics.graph.resources import TextureDesc
-from sparrow.graphics.passes.forward_tonemap import ForwardTonemapPass
-from sparrow.graphics.passes.forward_unlit import ForwardUnlitPass
+from sparrow.graphics.assets.obj_loader import load_obj
+from sparrow.graphics.debug.profiler import profile
+from sparrow.graphics.ecs.frame_submit import (
+    CameraData,
+    DrawItem,
+    LightPoint,
+    RenderFrameInput,
+)
+from sparrow.graphics.graph.resources import FramebufferDesc, TextureDesc
+from sparrow.graphics.passes.deferred_lighting import DeferredLightingPass
+from sparrow.graphics.passes.gbuffer import GBufferPass
+from sparrow.graphics.passes.tonemap import TonemapPass
 from sparrow.graphics.renderer.deferred_renderer import DeferredRenderer
 from sparrow.graphics.renderer.settings import (
     DeferredRendererSettings,
@@ -46,18 +54,120 @@ class AppState:
     last_time: float = time.perf_counter()
 
 
-def make_dummy_camera(w: int, h: int) -> CameraData:
-    """Create a simple camera; to be replaced with math utils later."""
-    view = np.eye(4, dtype=np.float32)
-    proj = np.eye(4, dtype=np.float32)
-    vp = proj @ view
+def make_simple_camera(
+    eye: NDArray[np.float32],
+    target: NDArray[np.float32],
+    fov: float,
+    w: int,
+    h: int,
+    near: float,
+    far: float,
+) -> CameraData:
+    """
+    Create a static camera.
+    Optimized for per-frame execution by removing Numpy call overhead for vector math.
+    """
+    # 1. Unpack values to float scalars (faster than numpy indexing in loops)
+    ex, ey, ez = float(eye[0]), float(eye[1]), float(eye[2])
+    tx, ty, tz = float(target[0]), float(target[1]), float(target[2])
+
+    # 2. Forward Vector (f = target - eye)
+    fx, fy, fz = tx - ex, ty - ey, tz - ez
+
+    # Normalize Forward
+    # Pure python sqrt is faster than np.linalg.norm for single vector
+    len_f = math.sqrt(fx * fx + fy * fy + fz * fz)
+    inv_len_f = 1.0 / len_f if len_f > 1e-9 else 1.0
+    fx, fy, fz = fx * inv_len_f, fy * inv_len_f, fz * inv_len_f
+
+    # 3. Right Vector (s = cross(f, up))
+    # Assuming Up is always (0, 1, 0), we can hardcode the cross product
+    # s = (fz*up.y, 0, -fx*up.y) -> (-fz, 0, fx)
+    sx, sy, sz = -fz, 0.0, fx
+
+    # Normalize Right
+    len_s_sq = sx * sx + sz * sz
+    if len_s_sq < 1e-12:
+        # Singularity: looking straight up/down
+        sx, sy, sz = 1.0, 0.0, 0.0
+    else:
+        inv_len_s = 1.0 / math.sqrt(len_s_sq)
+        sx, sy, sz = sx * inv_len_s, sy * inv_len_s, sz * inv_len_s
+
+    # 4. Up Vector (u = cross(s, f)) (Recompute orthogonal up)
+    # Standard cross product expansion
+    ux = sy * fz - sz * fy
+    uy = sz * fx - sx * fz
+    uz = sx * fy - sy * fx
+
+    # 5. Translation Dot Products
+    # view[0,3] = -dot(s, eye)
+    trans_s = -(sx * ex + sy * ey + sz * ez)
+    # view[1,3] = -dot(u, eye)
+    trans_u = -(ux * ex + uy * ey + uz * ez)
+    # view[2,3] = dot(f, eye) (Recall: View Z is -f)
+    trans_f = fx * ex + fy * ey + fz * ez
+
+    # 6. Construct View Matrix directly (Single allocation)
+    # Note: Row 2 is -f
+    view = np.array(
+        [
+            [sx, sy, sz, trans_s],
+            [ux, uy, uz, trans_u],
+            [-fx, -fy, -fz, trans_f],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+
+    # 7. Construct Projection Matrix
+    aspect = w / h
+    tan_half_fov = math.tan(math.radians(fov) * 0.5)
+    fl = 1.0 / tan_half_fov
+
+    inv_nf = 1.0 / (near - far)
+    p22 = (far + near) * inv_nf
+    p23 = (2.0 * far * near) * inv_nf
+
+    proj = np.array(
+        [
+            [fl / aspect, 0.0, 0.0, 0.0],
+            [0.0, fl, 0.0, 0.0],
+            [0.0, 0.0, p22, p23],
+            [0.0, 0.0, -1.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+
+    # 8. Optimized Matrix Multiply (Proj @ View)
+    # Because Proj is sparse, we can calculate the result directly
+    # faster than np.matmul(proj, view) for 4x4.
+
+    # P00 * ViewRow0
+    # P11 * ViewRow1
+    # P22 * ViewRow2 + P23 * ViewRow3 (where ViewRow3 is 0,0,0,1)
+    # -1  * ViewRow2
+
+    p00 = fl / aspect
+    p11 = fl
+
+    vp = np.array(
+        [
+            [p00 * sx, p00 * sy, p00 * sz, p00 * trans_s],
+            [p11 * ux, p11 * uy, p11 * uz, p11 * trans_u],
+            [p22 * -fx, p22 * -fy, p22 * -fz, p22 * trans_f + p23],
+            [fx, fy, fz, -trans_f],  # Row 3 is -1 * ViewRow2
+        ],
+        dtype=np.float32,
+    )
+
     return CameraData(
         view=view,
         proj=proj,
         view_proj=vp,
-        position_ws=np.array([0.0, 0.0, 2.0], dtype=np.float32),
-        near=0.1,
-        far=100.0,
+        position_ws=eye,
+        near=near,
+        far=far,
     )
 
 
@@ -72,6 +182,7 @@ def _handle_pygame_events() -> None:
                 sys.exit(0)
 
 
+@profile(out_dir=Path(".debug"), enabled=True)
 def main() -> None:
     """Main entrypoint for the minimal renderer test app."""
     # 1) Create window + ModernGL context.
@@ -82,6 +193,7 @@ def main() -> None:
         (window_width, window_height),
         pygame.OPENGL | pygame.DOUBLEBUF | pygame.FULLSCREEN | pygame.SCALED,
     )
+    clock = pygame.Clock()
 
     ctx = moderngl.create_context(460)
     gl_version = ctx.version_code
@@ -103,24 +215,27 @@ def main() -> None:
     renderer = DeferredRenderer(ctx, settings=settings, emit_event=None)
     renderer.initialize()
 
-    triangle_mesh_id = MeshId("triangle")
-    triangle_mesh = MeshData(
-        vertices=struct.pack("6f", -0.6, -0.6, 0.6, -0.6, 0.0, 0.6),
-        indices=None,
-        vertex_layout=VertexLayout(attributes=["in_pos"], format="2f", stride_bytes=8),
+    stormtrooper = MeshId("stormtrooper")
+    renderer.mesh_manager.create(
+        stormtrooper,
+        load_obj("stormtrooper.obj"),
+        label="Stormtrooper Helmet",
     )
-    renderer.mesh_manager.create(triangle_mesh_id, triangle_mesh, label="Test Triangle")
 
-    mat_red_id = MaterialId("mat_red")
+    pbr_mat = MaterialId("pbr_mat")
     renderer.material_manager.create(
-        mat_red_id,
-        Material(base_color_factor=(1.0, 0.0, 0.0, 1.0)),
+        pbr_mat,
+        Material(
+            roughness=0.1,
+            base_color_factor=(1.0, 1.0, 1.0, 1.0),
+            metalness=1.0,
+        ),
     )
 
     draws: List[DrawItem] = [
         DrawItem(
-            triangle_mesh_id,
-            mat_red_id,
+            stormtrooper,
+            pbr_mat,
             np.eye(4, dtype=np.float32),
             1,
         )
@@ -129,35 +244,124 @@ def main() -> None:
     api = RendererAPI(renderer)
     edit = api.begin_graph_edit(reason="set_default_pipeline")
 
-    hdr_res_id = ResourceId("hdr_color")
     edit.add_texture(
-        hdr_res_id,
+        ResourceId("g_albedo"),
         TextureDesc(
-            width=1920,
-            height=1080,
+            window_width,
+            window_height,
             components=4,
             dtype="f2",
-            label="HDR Color",
+            label="GBuffer Albedo",
+        ),
+    )
+    edit.add_texture(
+        ResourceId("g_normal"),
+        TextureDesc(
+            window_width,
+            window_height,
+            components=4,
+            dtype="f2",
+            label="GBuffer Normal",
+        ),
+    )
+    edit.add_texture(
+        ResourceId("g_orm"),
+        TextureDesc(
+            window_width,
+            window_height,
+            components=4,
+            dtype="f2",
+            label="GBuffer ORM",
+        ),
+    )
+    edit.add_texture(
+        ResourceId("g_depth"),
+        TextureDesc(
+            window_width,
+            window_height,
+            components=1,
+            dtype="f4",
+            label="GBuffer Depth",
+            depth=True,
         ),
     )
 
-    forward_pass_id = PassId("forward")
-    forward_pass = ForwardUnlitPass(
-        pass_id=forward_pass_id,
-        color_target=hdr_res_id,
+    edit.add_framebuffer(
+        ResourceId("gbuffer_fbo"),
+        FramebufferDesc(
+            color_attachments=(
+                ResourceId("g_albedo"),
+                ResourceId("g_normal"),
+                ResourceId("g_orm"),
+            ),
+            depth_attachment=ResourceId("g_depth"),
+            label="GBuffer FBO",
+        ),
     )
-    edit.add_pass(forward_pass_id, forward_pass)
 
-    tonemap_pass_id = PassId("tonemap")
-    tonemap_pass = ForwardTonemapPass(
-        pass_id=tonemap_pass_id,
-        hdr_input=hdr_res_id,
+    edit.add_pass(
+        PassId("gbuffer"),
+        GBufferPass(
+            pass_id=PassId("gbuffer"),
+            g_albedo=ResourceId("g_albedo"),
+            g_normal=ResourceId("g_normal"),
+            g_orm=ResourceId("g_orm"),
+            g_depth=ResourceId("g_depth"),
+        ),
     )
-    edit.add_pass(tonemap_pass_id, tonemap_pass)
+
+    edit.add_texture(
+        ResourceId("light_accum"),
+        TextureDesc(
+            window_width,
+            window_height,
+            components=4,
+            dtype="f2",
+            label="Light Accumulation",
+        ),
+    )
+
+    edit.add_framebuffer(
+        ResourceId("light_fbo"),
+        FramebufferDesc(
+            color_attachments=(ResourceId("light_accum"),),
+            depth_attachment=None,
+            label="Light Accum FBO",
+        ),
+    )
+
+    edit.add_pass(
+        PassId("deferred_lighting"),
+        DeferredLightingPass(
+            pass_id=PassId("deferred_lighting"),
+            out_fbo=ResourceId("light_fbo"),
+            light_accum=ResourceId("light_accum"),
+            g_albedo=ResourceId("g_albedo"),
+            g_normal=ResourceId("g_normal"),
+            g_orm=ResourceId("g_orm"),
+            g_depth=ResourceId("g_depth"),
+        ),
+    )
+
+    edit.add_pass(
+        PassId("tonemap"),
+        TonemapPass(
+            pass_id=PassId("tonemap"),
+            hdr_input=ResourceId("light_accum"),
+        ),
+    )
 
     edit.commit()
 
+    # Static camera data
+    eye = np.array([3.0, 1.0, 0.0], dtype=np.float32)
+    target = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    fov = 10.0
+    near = 0.1
+    far = 100.0
+
     running = True
+    t = 0
     while running:
         _handle_pygame_events()
 
@@ -169,14 +373,62 @@ def main() -> None:
         # 2) Poll input, window events, resize handling.
         # If resized, update renderer settings and rebuild graph or trigger resize path.
 
-        cam = make_dummy_camera(window_width, window_height)
+        cam = make_simple_camera(
+            eye=eye,
+            target=target,
+            fov=fov,
+            w=window_width,
+            h=window_height,
+            near=near,
+            far=far,
+        )
+        """
+        eye = np.array(
+            [
+                np.sin(t * 0.01) * 4.0,
+                1.5,
+                np.cos(t * 0.01) * 4.0,
+            ],
+            dtype=np.float32,
+        )
+        """
+        k = t * 0.02
+
+        point_lights = [
+            LightPoint(
+                np.array(
+                    [
+                        np.sin(t * 0.03) * 4.0,  # Base speed
+                        np.cos(t * 0.07) * 3.0,  # 2.3x faster vertical bob
+                        np.sin(t * 0.05) * 4.0,  # Different speed depth
+                    ],
+                    dtype=np.float32,
+                ),
+                10.0,
+                np.array([1, 0, 0], dtype=np.float32),
+                1.0,
+            ),
+            LightPoint(
+                np.array(
+                    [
+                        (np.sin(k) + 2 * np.sin(2 * k)) * 1.5,  # X
+                        (np.cos(k) - 2 * np.cos(2 * k)) * 1.5,  # Y
+                        (-np.sin(3 * k)) * 1.5,  # Z
+                    ],
+                    dtype=np.float32,
+                ),
+                10.0,
+                np.array([0, 0, 1], dtype=np.float32),
+                1.0,
+            ),
+        ]
 
         frame = RenderFrameInput(
             frame_index=state.frame_index,
             dt_seconds=dt,
             camera=cam,
             draws=draws,
-            point_lights=[],
+            point_lights=point_lights,
             debug_flags={"mode_blit": state.mode == "blit"},
             viewport_width=window_width,
             viewport_height=window_height,
@@ -184,6 +436,8 @@ def main() -> None:
 
         renderer.render_frame(frame)
         pygame.display.flip()
+        clock.tick(60)
+        t += 1
 
     # renderer.shutdown if it exists
 

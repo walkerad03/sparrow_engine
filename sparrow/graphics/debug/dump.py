@@ -92,7 +92,11 @@ def dump_render_graph_state(
             print(f"      Samples     : {getattr(handle, 'samples', 1)}")
             print(f"      Filter      : {handle.filter}")
             print(f"      Repeat X/Y  : {handle.repeat_x}/{handle.repeat_y}")
-            print(f"      Swizzle     : {handle.swizzle}")
+
+            if not getattr(handle, "_depth", False):
+                print(f"      Swizzle     : {handle.swizzle}")
+            else:
+                print("      Swizzle     : <depth texture>")
 
         # Buffer-specific info
         if isinstance(handle, moderngl.Buffer):
