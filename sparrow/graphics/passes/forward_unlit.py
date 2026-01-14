@@ -1,4 +1,4 @@
-# sparrow/graphics/passes/forward.py
+# sparrow/graphics/passes/forward_unlit.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -54,6 +54,10 @@ class ForwardUnlitPass(RenderPass):
     _u_model: moderngl.Uniform | None = None
     _u_base_color: moderngl.Uniform | None = None
     _fbo_rid: ResourceId | None = None
+
+    @property
+    def output_target(self) -> ResourceId | None:
+        return self.color_target
 
     def build(self) -> PassBuildInfo:
         writes: list[PassResourceUse] = []
@@ -132,7 +136,7 @@ class ForwardUnlitPass(RenderPass):
         services = exec_ctx.services
         frame = exec_ctx.frame
 
-        if self.color_target is None:
+        if self.output_target is None:
             gl.screen.use()
             gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
             gl.clear()
@@ -140,7 +144,7 @@ class ForwardUnlitPass(RenderPass):
             assert self._fbo_rid
             fbo_res = expect_resource(
                 exec_ctx.resources,
-                self._fbo_rid,
+                self.output_fbo_id,
                 FramebufferResource,
             )
             fbo = fbo_res.handle

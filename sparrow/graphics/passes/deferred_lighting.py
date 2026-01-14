@@ -63,7 +63,6 @@ class DeferredLightingPass(RenderPass):
     """
 
     pass_id: PassId
-    out_fbo: ResourceId
     light_accum: ResourceId
     g_albedo: ResourceId
     g_normal: ResourceId
@@ -82,6 +81,10 @@ class DeferredLightingPass(RenderPass):
     _u_light_color_intensity: moderngl.Uniform | None = None
 
     _max_lights: int = 64
+
+    @property
+    def output_target(self) -> ResourceId | None:
+        return self.g_albedo
 
     def build(self) -> PassBuildInfo:
         return PassBuildInfo(
@@ -190,7 +193,7 @@ class DeferredLightingPass(RenderPass):
         # Resolve output framebuffer
         out_fbo_res = expect_resource(
             exec_ctx.resources,
-            ResourceId(f"fbo:{self.pass_id}"),
+            self.output_fbo_id,
             FramebufferResource,
         )
         out_fbo = out_fbo_res.handle

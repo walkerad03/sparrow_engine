@@ -32,6 +32,29 @@ def profile(*, out_dir: Path, enabled: bool = True):
                 profiler.dump_stats(prof_path)
                 print(f"[profile] wrote {prof_path}")
 
+                stats = pstats.Stats(profiler)
+
+                frame_count = 0
+                for (_, _, name), (
+                    cc,
+                    nc,
+                    tt,
+                    ct,
+                    callers,
+                ) in stats.stats.items():
+                    if name in (
+                        "<built-in method pygame.display.flip>",
+                        "<built-in method pygame.display.update>",
+                    ):
+                        frame_count += nc
+
+                total_time = stats.total_tt
+                fps = frame_count / total_time if total_time > 0 else 0
+
+                print(f"\n[profile] Execution results for {base}:")
+                print(f"[profile] Total Time: {total_time:.4f}s")
+                print(f"[profile] Average FPS: {fps:.2f}")
+
                 cmds: list[str] = ["tottime", "cumtime", "calls"]
                 paths: list[Path] = [out_dir / f"{base}.{x}.txt" for x in cmds]
 

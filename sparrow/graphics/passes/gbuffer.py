@@ -49,6 +49,10 @@ class GBufferPass(RenderPass):
     _u_roughness: moderngl.Uniform | None = None
     _u_metalness: moderngl.Uniform | None = None
 
+    @property
+    def output_target(self) -> ResourceId | None:
+        return self.g_albedo
+
     def build(self) -> PassBuildInfo:
         """Declare GBuffer attachments as writes; may read material textures."""
         return PassBuildInfo(
@@ -102,7 +106,7 @@ class GBufferPass(RenderPass):
 
         fbo_res = expect_resource(
             exec_ctx.resources,
-            ResourceId(f"fbo:{self.pass_id}"),
+            self.output_fbo_id,
             FramebufferResource,
         )
         fbo = fbo_res.handle

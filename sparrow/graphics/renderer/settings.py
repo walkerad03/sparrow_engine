@@ -1,6 +1,7 @@
 # sparrow/graphics/renderer/settings.py
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 
@@ -23,10 +24,39 @@ class ResolutionSettings:
 
 
 @dataclass(frozen=True, slots=True)
-class DeferredRendererSettings:
-    """Deferred renderer configuration. Extend as needed."""
+class RendererSettings(ABC):
+    """Base class for all rendering pipeline configurations."""
 
     resolution: ResolutionSettings
+
+
+@dataclass(frozen=True, slots=True)
+class DeferredRendererSettings(RendererSettings):
+    """Deferred renderer configuration."""
+
     hdr: bool = True
     msaa_samples: int = 1
-    enable_debug_views: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ForwardRendererSettings(RendererSettings):
+    """Forward renderer configuration."""
+
+    msaa_samples: int = 4
+    hdr: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RaytracingRendererSettings(RendererSettings):
+    """Forward renderer configuration."""
+
+    max_bounces: int = 2
+    samples_per_pixel: int = 1
+    denoiser_enabled: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class BlitRendererSettings(RendererSettings):
+    """Forward renderer configuration."""
+
+    ...

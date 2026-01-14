@@ -25,12 +25,7 @@ from sparrow.graphics.graph.resources import (
     allocate_framebuffer,
     allocate_texture,
 )
-from sparrow.graphics.util.ids import PassId, ResourceId
-
-
-def _fbo_rid(pid: PassId) -> ResourceId:
-    """ResourceId used for compiler-generated per-pass framebuffers."""
-    return ResourceId(f"fbo:{pid}")
+from sparrow.graphics.util.ids import PassId, ResourceId, get_pass_fbo_id
 
 
 def _all_declared_resources(builder: RenderGraphBuilder) -> Set[ResourceId]:
@@ -198,6 +193,7 @@ def _allocate_pass_framebuffers(
     *,
     gl: moderngl.Context,
     order: Sequence[PassId],
+    builder: RenderGraphBuilder,
     pass_infos: Mapping[PassId, PassBuildInfo],
     textures: Mapping[ResourceId, TextureResource],
 ) -> Dict[ResourceId, FramebufferResource]:
@@ -213,10 +209,14 @@ def _allocate_pass_framebuffers(
     fbos: Dict[ResourceId, FramebufferResource] = {}
 
     for pid in order:
+        pass_obj = builder.passes[pid]
+        if not pass_obj.output_target:
+            continue
+
         info = pass_infos[pid]
 
-        color_rids: List[ResourceId] = []
-        depth_rid: ResourceId | None = None
+        color_rids = [u.resource for u in info.writes if u.stage == "color"]
+        depth_rid = next((u.resource for u in info.writes if u.stage == "depth"), None)
 
         for use in info.writes:
             if not _is_write(use.access):
@@ -224,7 +224,7 @@ def _allocate_pass_framebuffers(
             if use.stage == "color":
                 color_rids.append(use.resource)
             elif use.stage == "depth":
-                depth_rid = use.resource
+                depth_rid: ResourceId = use.resource
 
         if not color_rids and depth_rid is None:
             continue  # compute-only pass or pass writing only buffers, etc.
@@ -240,7 +240,7 @@ def _allocate_pass_framebuffers(
             depth_attachment_id=depth_rid,
             label=f"fbo:{pid}",
         )
-        fbos[_fbo_rid(pid)] = fbo
+        fbos[get_pass_fbo_id(pid)] = fbo
 
     return fbos
 
@@ -299,6 +299,7 @@ def compile_render_graph(
     fbo_resources = _allocate_pass_framebuffers(
         gl=gl,
         order=order,
+        builder=builder,
         pass_infos=pass_infos,
         textures=tex_resources,
     )

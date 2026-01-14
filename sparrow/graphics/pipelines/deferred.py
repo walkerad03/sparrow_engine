@@ -1,64 +1,39 @@
 from sparrow.graphics.graph.builder import RenderGraphBuilder
-from sparrow.graphics.graph.resources import FramebufferDesc, TextureDesc
+from sparrow.graphics.graph.resources import TextureDesc
 from sparrow.graphics.passes.deferred_lighting import DeferredLightingPass
 from sparrow.graphics.passes.gbuffer import GBufferPass
 from sparrow.graphics.passes.tonemap import TonemapPass
+from sparrow.graphics.renderer.settings import DeferredRendererSettings
 from sparrow.graphics.util.ids import PassId, ResourceId
 
 
-def build_deferred_pipeline(builder: RenderGraphBuilder, width: int, height: int):
+def build_deferred_pipeline(
+    builder: RenderGraphBuilder, settings: DeferredRendererSettings
+):
+    width, height = (
+        settings.resolution.logical_width,
+        settings.resolution.logical_height,
+    )
+
     builder.add_texture(
         ResourceId("g_albedo"),
-        TextureDesc(
-            width,
-            height,
-            4,
-            "f2",
-            label="Albedo",
-        ),
+        TextureDesc(width, height, 4, "f2"),
     )
     builder.add_texture(
         ResourceId("g_normal"),
-        TextureDesc(
-            width,
-            height,
-            4,
-            "f2",
-            label="Normal",
-        ),
+        TextureDesc(width, height, 4, "f2"),
     )
     builder.add_texture(
         ResourceId("g_orm"),
-        TextureDesc(
-            width,
-            height,
-            4,
-            "f2",
-            label="ORM",
-        ),
+        TextureDesc(width, height, 4, "f2"),
     )
     builder.add_texture(
         ResourceId("g_depth"),
-        TextureDesc(
-            width,
-            height,
-            1,
-            "f4",
-            depth=True,
-            label="Depth",
-        ),
+        TextureDesc(width, height, 1, "f4", depth=True),
     )
-
-    builder.add_framebuffer(
-        ResourceId("gbuffer_fbo"),
-        FramebufferDesc(
-            color_attachments=(
-                ResourceId("g_albedo"),
-                ResourceId("g_normal"),
-                ResourceId("g_orm"),
-            ),
-            depth_attachment=ResourceId("g_depth"),
-        ),
+    builder.add_texture(
+        ResourceId("light_accum"),
+        TextureDesc(width, height, 4, "f2"),
     )
 
     builder.add_pass(
@@ -72,30 +47,10 @@ def build_deferred_pipeline(builder: RenderGraphBuilder, width: int, height: int
         ),
     )
 
-    builder.add_texture(
-        ResourceId("light_accum"),
-        TextureDesc(
-            width,
-            height,
-            4,
-            "f2",
-            label="LightAccum",
-        ),
-    )
-
-    builder.add_framebuffer(
-        ResourceId("light_fbo"),
-        FramebufferDesc(
-            (ResourceId("light_accum"),),
-            depth_attachment=None,
-        ),
-    )
-
     builder.add_pass(
         PassId("deferred_lighting"),
         DeferredLightingPass(
             pass_id=PassId("deferred_lighting"),
-            out_fbo=ResourceId("light_fbo"),
             light_accum=ResourceId("light_accum"),
             g_albedo=ResourceId("g_albedo"),
             g_normal=ResourceId("g_normal"),
@@ -108,6 +63,6 @@ def build_deferred_pipeline(builder: RenderGraphBuilder, width: int, height: int
         PassId("tonemap"),
         TonemapPass(
             pass_id=PassId("tonemap"),
-            hdr_input=ResourceId("light_accum"),
+            hdr_in=ResourceId("light_accum"),
         ),
     )

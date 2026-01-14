@@ -20,6 +20,7 @@ class MeshHandle:
     vertex_layout: VertexLayout
     vao_cache: Dict[int, moderngl.VertexArray]  # keyed by program id/hash
     label: str
+    data: MeshData
 
 
 class MeshManager:
@@ -50,6 +51,30 @@ class MeshManager:
             label="Dense Icosphere",
         )
 
+        self.create(
+            MeshId("engine.stanford_dragon"),
+            load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon.obj"),
+            label="Stanford Dragon",
+        )
+
+        self.create(
+            MeshId("engine.stanford_bunny"),
+            load_obj("sparrow/graphics/meshes/default/stanford-bunny.obj"),
+            label="Stanford Bunny",
+        )
+
+        self.create(
+            MeshId("engine.large_plane"),
+            load_obj("sparrow/graphics/meshes/default/large_plane.obj"),
+            label="Large Plane",
+        )
+
+        self.create(
+            MeshId("engine.stanford_dragon_lowpoly"),
+            load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon_decimated.obj"),
+            label="Stanford Dragon (Low Poly)",
+        )
+
     def create(self, mesh_id: MeshId, data: MeshData, *, label: str = "") -> MeshHandle:
         """Upload a mesh and store it under mesh_id."""
         if mesh_id in self._meshes:
@@ -67,6 +92,7 @@ class MeshManager:
             vertex_layout=data.vertex_layout,
             vao_cache={},
             label=label or str(mesh_id),
+            data=data,
         )
 
         self._meshes[mesh_id] = handle

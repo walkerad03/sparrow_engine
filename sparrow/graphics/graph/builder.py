@@ -27,9 +27,10 @@ class RenderGraphBuilder:
     framebuffers: Dict[ResourceId, FramebufferDesc] = field(default_factory=dict)
     passes: Dict[PassId, RenderPass] = field(default_factory=dict)
 
-    def add_texture(self, rid: ResourceId, desc: TextureDesc) -> None:
+    def add_texture(self, rid: ResourceId, desc: TextureDesc) -> ResourceId:
         """Register or replace a texture resource description."""
         self.textures[rid] = desc
+        return rid
 
     def add_buffer(self, rid: ResourceId, desc: BufferDesc) -> None:
         """Register or replace a buffer resource description."""
@@ -39,12 +40,13 @@ class RenderGraphBuilder:
         """Register or replace a buffer resource description."""
         self.framebuffers[rid] = desc
 
-    def add_pass(self, pid: PassId, pass_obj: RenderPass) -> None:
+    def add_pass(self, pid: PassId, pass_obj: RenderPass) -> PassId:
         """Add a new pass. Raises if pid already exists (use replace_pass)."""
         if pid in self.passes:
             raise KeyError(f"Pass '{pid}' already exists (use replace_pass)")
 
         self.passes[pid] = pass_obj
+        return pid
 
     def replace_pass(self, pid: PassId, pass_obj: RenderPass) -> None:
         """Replace an existing pass implementation under the same id."""

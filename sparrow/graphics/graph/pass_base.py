@@ -14,13 +14,14 @@ from typing import (
 
 import moderngl
 
+from sparrow.core.components import RenderSettings
 from sparrow.graphics.assets.material_manager import MaterialManager
 from sparrow.graphics.assets.mesh_manager import MeshManager
 from sparrow.graphics.assets.texture_manager import TextureManager
 from sparrow.graphics.ecs.frame_submit import RenderFrameInput
 from sparrow.graphics.graph.resources import GraphResource
 from sparrow.graphics.shaders.shader_manager import ShaderManager
-from sparrow.graphics.util.ids import PassId, ResourceId
+from sparrow.graphics.util.ids import PassId, ResourceId, get_pass_fbo_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +126,23 @@ class RenderPass(Protocol):
     Passes should be small and composable. heavy scene processing belongs in ECS
     extraction systems, not in `execute()`.
     """
+
+    pass_id: PassId
+    settings: RenderSettings
+
+    @property
+    def output_fbo_id(self) -> ResourceId:
+        """Standardized FBO lookup ID."""
+        return get_pass_fbo_id(self.pass_id)
+
+    @property
+    def output_target(self) -> ResourceId | None:
+        """
+        If None, the pass targets the screen.
+        If it returns a ResourceId, the compiler uses that as the primary
+        color attachment to build the auto-FBO.
+        """
+        ...
 
     def build(self) -> PassBuildInfo:
         """Declare resource reads/writes and pass identity for compilation."""

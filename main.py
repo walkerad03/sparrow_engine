@@ -5,6 +5,7 @@ Run mode: (Not implemented yet)
     - "blit": just show a generated gradient texture (tests graph, textures, tonemap)
     - "forward": draw a triangle (tests mesh path)
     - "deferred": run gbuffer + lighting (tests default deferred pipeline)
+    - "raytrace": Run path traced lighting.
 
 Expected keys:
     - ESC: quit
@@ -25,21 +26,21 @@ import pygame
 from numpy.typing import NDArray
 
 from sparrow.graphics.assets.material_manager import Material
-from sparrow.graphics.assets.obj_loader import load_obj
 from sparrow.graphics.debug.profiler import profile
 from sparrow.graphics.ecs.frame_submit import (
     CameraData,
     DrawItem,
-    LightPoint,
     RenderFrameInput,
 )
 from sparrow.graphics.graph.builder import RenderGraphBuilder
+from sparrow.graphics.pipelines.blit import build_blit_pipeline
 from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.forward import build_forward_pipeline
-from sparrow.graphics.renderer.deferred_renderer import DeferredRenderer
+from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
+from sparrow.graphics.renderer.renderer import Renderer
 from sparrow.graphics.renderer.settings import (
-    DeferredRendererSettings,
     PresentScaleMode,
+    RaytracingRendererSettings,
     ResolutionSettings,
 )
 from sparrow.graphics.util.ids import MaterialId, MeshId
@@ -47,7 +48,7 @@ from sparrow.graphics.util.ids import MaterialId, MeshId
 
 @dataclass(slots=True)
 class AppState:
-    mode: Literal["blit", "forward", "deferred"]
+    mode: Literal["blit", "forward", "deferred", "raytrace"]
     frame_index: int = 0
     last_time: float = time.perf_counter()
 
@@ -169,7 +170,7 @@ def make_simple_camera(
     )
 
 
-def _handle_pygame_events() -> None:
+def _handle_pygame_events(screen) -> None:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -181,9 +182,10 @@ def _handle_pygame_events() -> None:
 
 
 PIPELINES = {
+    "raytrace": build_raytracing_pipeline,
     "deferred": build_deferred_pipeline,
     "forward": build_forward_pipeline,
-    # "blit": build_blit_pipeline
+    "blit": build_blit_pipeline,
 }
 
 
@@ -194,7 +196,7 @@ def main() -> None:
     window_width, window_height = 1920, 1080
 
     pygame.init()
-    pygame.display.set_mode(
+    screen = pygame.display.set_mode(
         (window_width, window_height),
         pygame.OPENGL | pygame.DOUBLEBUF | pygame.FULLSCREEN | pygame.SCALED,
     )
@@ -204,74 +206,99 @@ def main() -> None:
     gl_version = ctx.version_code
     print(f"OpenGL version {str(gl_version)[0]}.{str(gl_version)[1:]}")
 
-    state = AppState(mode="deferred")
-
-    settings = DeferredRendererSettings(
+    settings = RaytracingRendererSettings(
         resolution=ResolutionSettings(
-            logical_width=int(1920 / 4),
-            logical_height=int(1080 / 4),
+            logical_width=int(1920 / 2),
+            logical_height=int(1080 / 2),
             scale_mode=PresentScaleMode.INTEGER_FIT,
         ),
-        hdr=True,
-        msaa_samples=1,
-        enable_debug_views=False,
+        denoiser_enabled=True,
+        samples_per_pixel=1,
+        max_bounces=3,
     )
 
-    renderer = DeferredRenderer(ctx, settings=settings, emit_event=None)
-    renderer.initialize()
+    state = AppState(mode="raytrace")
+    renderer = Renderer(ctx, settings)
 
-    def configure_graph(builder: RenderGraphBuilder):
-        if state.mode in PIPELINES:
-            PIPELINES[state.mode](builder, window_width, window_height)
-        else:
+    def sync_pipeline(builder: RenderGraphBuilder) -> None:
+        pipeline_func = PIPELINES.get(state.mode)
+        if not pipeline_func:
             raise ValueError(f"Unknown mode {state.mode}")
+        pipeline_func(builder, settings)
 
-    renderer.rebuild_graph(configure_graph, reason=f"mode_{state.mode}")
+    renderer.initialize(sync_pipeline)
 
-    stormtrooper = MeshId("stormtrooper")
-    renderer.mesh_manager.create(
-        stormtrooper,
-        load_obj("stormtrooper.obj"),
-        label="Stormtrooper Helmet",
+    renderer.material_manager.create(
+        MaterialId("stainless_steel"),
+        Material(
+            base_color_factor=(0.669, 0.639, 0.598, 1.0),
+            metalness=1.0,
+            roughness=0.0,
+        ),
     )
 
-    pbr_mat = MaterialId("pbr_mat")
     renderer.material_manager.create(
-        pbr_mat,
+        MaterialId("floor"),
         Material(
-            roughness=0.1,
-            base_color_factor=(1.0, 1.0, 1.0, 1.0),
+            base_color_factor=(0.02, 0.02, 0.02, 1.0),
+            metalness=0.0,
+            roughness=0.9,
+        ),
+    )
+
+    renderer.material_manager.create(
+        MaterialId("gold"),
+        Material(
+            base_color_factor=(1.059, 0.773, 0.307, 1.0),
             metalness=1.0,
+            roughness=0.0,
+        ),
+    )
+
+    renderer.material_manager.create(
+        MaterialId("copper"),
+        Material(
+            base_color_factor=(0.932, 0.623, 0.522, 1.0),
+            metalness=1.0,
+            roughness=0.0,
         ),
     )
 
     draws: List[DrawItem] = [
         DrawItem(
-            stormtrooper,
-            pbr_mat,
+            MeshId("engine.stanford_dragon_lowpoly"),
+            MaterialId("copper"),
             np.eye(4, dtype=np.float32),
             1,
-        )
+        ),
+        DrawItem(
+            MeshId("engine.large_plane"),
+            MaterialId("floor"),
+            np.eye(4, dtype=np.float32),
+            2,
+        ),
     ]
 
+    point_lights = []
+
     # Static camera data
-    eye = np.array([3.0, 1.0, 0.0], dtype=np.float32)
-    target = np.array([0.0, 1.0, 0.0], dtype=np.float32)
-    fov = 10.0
+    eye = np.array([2.0, 0.75, -2.0], dtype=np.float32)
+    target = np.array([0.0, 0.5, 0.0], dtype=np.float32)
+    fov = 45.0
     near = 0.1
     far = 100.0
 
     running = True
     t = 0
     while running:
-        _handle_pygame_events()
+        _handle_pygame_events(screen)
 
         now = time.perf_counter()
         dt = now - state.last_time
         state.last_time = now
         state.frame_index += 1
 
-        # 2) Poll input, window events, resize handling.
+        # TODO: Poll input, window events, resize handling.
         # If resized, update renderer settings and rebuild graph or trigger resize path.
 
         cam = make_simple_camera(
@@ -283,46 +310,6 @@ def main() -> None:
             near=near,
             far=far,
         )
-        """
-        eye = np.array(
-            [
-                np.sin(t * 0.01) * 4.0,
-                1.5,
-                np.cos(t * 0.01) * 4.0,
-            ],
-            dtype=np.float32,
-        )
-        """
-        k = t * 0.02
-
-        point_lights = [
-            LightPoint(
-                np.array(
-                    [
-                        np.sin(t * 0.03) * 4.0,  # Base speed
-                        np.cos(t * 0.07) * 3.0,  # 2.3x faster vertical bob
-                        np.sin(t * 0.05) * 4.0,  # Different speed depth
-                    ],
-                    dtype=np.float32,
-                ),
-                10.0,
-                np.array([1, 0, 0], dtype=np.float32),
-                1.0,
-            ),
-            LightPoint(
-                np.array(
-                    [
-                        (np.sin(k) + 2 * np.sin(2 * k)) * 1.5,  # X
-                        (np.cos(k) - 2 * np.cos(2 * k)) * 1.5,  # Y
-                        (-np.sin(3 * k)) * 1.5,  # Z
-                    ],
-                    dtype=np.float32,
-                ),
-                10.0,
-                np.array([0, 0, 1], dtype=np.float32),
-                1.0,
-            ),
-        ]
 
         frame = RenderFrameInput(
             frame_index=state.frame_index,
@@ -340,7 +327,8 @@ def main() -> None:
         clock.tick(60)
         t += 1
 
-    # renderer.shutdown if it exists
+        if t == 60 * 2:
+            pygame.image.save(screen, "frame.png")
 
 
 if __name__ == "__main__":

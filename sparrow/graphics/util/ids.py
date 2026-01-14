@@ -17,3 +17,7 @@ class Named:
     """Small helper for validated, human-readable names used across the renderer."""
 
     name: str
+
+
+def get_pass_fbo_id(pid: PassId) -> ResourceId:
+    return ResourceId(f"fbo:{pid}")

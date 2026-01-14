@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Tuple, cast
+from typing import Mapping, cast
 
 import moderngl
 
@@ -37,12 +37,15 @@ class TonemapPass(RenderPass):
     """
 
     pass_id: PassId
-    hdr_input: ResourceId
-    clear_color: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    hdr_in: ResourceId
 
     _program: moderngl.Program | moderngl.ComputeShader | None = None
     _vao: moderngl.VertexArray | None = None
     _vbo: moderngl.Buffer | None = None
+
+    @property
+    def output_target(self) -> None:
+        return None
 
     def build(self) -> PassBuildInfo:
         return PassBuildInfo(
@@ -50,7 +53,7 @@ class TonemapPass(RenderPass):
             name="Tonemap",
             reads=[
                 PassResourceUse(
-                    resource=self.hdr_input,
+                    resource=self.hdr_in,
                     access="read",
                     stage="sampled",
                     binding=0,
@@ -107,15 +110,10 @@ class TonemapPass(RenderPass):
         gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
 
         # clear default framebuffer
-        gl.clear(
-            red=self.clear_color[0],
-            green=self.clear_color[1],
-            blue=self.clear_color[2],
-            alpha=self.clear_color[3],
-        )
+        gl.clear()
 
         # bind HDR input
-        tex = expect_resource(exec_ctx.resources, self.hdr_input, TextureResource)
+        tex = expect_resource(exec_ctx.resources, self.hdr_in, TextureResource)
         tex.handle.use(location=0)
 
         # draw to default framebuffer

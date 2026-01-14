@@ -63,6 +63,10 @@ class DebugPresentPass(RenderPass):
     _vbo: moderngl.Buffer | None = None
     _u_tex: moderngl.Uniform | None = None
 
+    @property
+    def output_target(self) -> None:
+        return None
+
     def build(self) -> PassBuildInfo:
         reads: list[PassResourceUse] = []
         if self.source_tex is not None:
