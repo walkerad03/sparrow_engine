@@ -43,6 +43,7 @@ from sparrow.graphics.pipelines.forward import build_forward_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.renderer import Renderer
 from sparrow.graphics.renderer.settings import (
+    DeferredRendererSettings,
     PresentScaleMode,
     RaytracingRendererSettings,
     ResolutionSettings,
@@ -203,7 +204,7 @@ def main() -> None:
     pygame.init()
     screen = pygame.display.set_mode(
         (window_width, window_height),
-        pygame.OPENGL | pygame.DOUBLEBUF | pygame.FULLSCREEN | pygame.SCALED,
+        pygame.OPENGL | pygame.DOUBLEBUF,
     )
     clock = pygame.Clock()
 
@@ -235,7 +236,9 @@ def main() -> None:
         max_bounces=6,
     )
 
-    state = AppState(mode="blit")
+    settings = DeferredRendererSettings(resolution, sunlight)
+
+    state = AppState(mode="deferred")
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:
@@ -298,20 +301,14 @@ def main() -> None:
             np.eye(4, dtype=np.float32),
             1,
         ),
-        DrawItem(
-            MeshId("engine.large_plane"),
-            MaterialId("blackboard"),
-            np.eye(4, dtype=np.float32),
-            2,
-        ),
     ]
 
     point_lights = []
 
     # Static camera data
     eye = np.array([2.0, 0.75, -2.0], dtype=np.float32)
-    target = np.array([0.0, 0.5, 0.0], dtype=np.float32)
-    fov = 45.0
+    target = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    fov = 60.0
     near = 0.1
     far = 100.0
 

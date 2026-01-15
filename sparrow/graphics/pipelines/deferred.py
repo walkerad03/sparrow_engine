@@ -51,6 +51,7 @@ def build_deferred_pipeline(
         PassId("deferred_lighting"),
         DeferredLightingPass(
             pass_id=PassId("deferred_lighting"),
+            settings=settings,
             light_accum=ResourceId("light_accum"),
             g_albedo=ResourceId("g_albedo"),
             g_normal=ResourceId("g_normal"),

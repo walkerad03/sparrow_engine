@@ -22,6 +22,8 @@ from sparrow.graphics.graph.resources import (
     expect_resource,
 )
 from sparrow.graphics.helpers.fullscreen import create_fullscreen_triangle
+from sparrow.graphics.helpers.nishita import generate_nishita_sky_lut
+from sparrow.graphics.renderer.settings import DeferredRendererSettings
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
 from sparrow.graphics.util.ids import PassId, ResourceId, ShaderId
@@ -63,6 +65,8 @@ class DeferredLightingPass(RenderPass):
     """
 
     pass_id: PassId
+    settings: DeferredRendererSettings
+
     light_accum: ResourceId
     g_albedo: ResourceId
     g_normal: ResourceId
@@ -79,6 +83,8 @@ class DeferredLightingPass(RenderPass):
     _u_light_count: moderngl.Uniform | None = None
     _u_light_pos_radius: moderngl.Uniform | None = None
     _u_light_color_intensity: moderngl.Uniform | None = None
+
+    _u_sky_lut: moderngl.Texture | None = None
 
     _max_lights: int = 64
 
@@ -186,6 +192,21 @@ class DeferredLightingPass(RenderPass):
         self._u_g_orm = u_g_orm
         self._u_g_depth = u_g_depth
 
+        sun_to_world = np.array(self.settings.sunlight.direction, dtype=np.float32)
+        world_to_sun = -sun_to_world
+        sky_lut_data = generate_nishita_sky_lut(
+            1024,
+            512,
+            tuple(world_to_sun),
+        )
+
+        self._u_sky_lut = ctx.texture(
+            (1024, 512),
+            4,
+            data=sky_lut_data,
+            dtype="f4",
+        )
+
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         """Bind GBuffer textures and render a fullscreen triangle."""
         gl = exec_ctx.gl
@@ -228,6 +249,7 @@ class DeferredLightingPass(RenderPass):
         assert self._u_light_count is not None
         assert self._u_light_pos_radius is not None
         assert self._u_light_color_intensity is not None
+        assert self._u_sky_lut
 
         cam = exec_ctx.frame.camera
 
@@ -242,6 +264,10 @@ class DeferredLightingPass(RenderPass):
             float(cam_pos[1]),
             float(cam_pos[2]),
         )
+
+        if self.settings.sunlight.enabled:
+            self._program["u_sun_direction"].value = self.settings.sunlight.direction
+            self._u_sky_lut.use(10)
 
         # point lights (pack into vec4 arrays)
         lights = exec_ctx.frame.point_lights

@@ -1,4 +1,4 @@
-#version 330
+#version 460 core
 
 in vec2 v_uv;
 out vec4 o_color;
@@ -15,6 +15,9 @@ const int MAX_LIGHTS = 64;
 uniform int   u_light_count;
 uniform vec4  u_light_pos_radius[MAX_LIGHTS];
 uniform vec4  u_light_color_intensity[MAX_LIGHTS];
+
+uniform vec3 u_sun_direction;
+layout(binding=10) uniform sampler2D u_sky_lut;
 
 const float PI = 3.14159265359;
 
@@ -71,6 +74,15 @@ vec3 reconstruct_ws(vec2 uv, float depth01) {
     return ws.xyz / max(ws.w, 1e-6);
 }
 
+vec2 dir_to_uv(vec3 dir) {
+    // atan(z, x) gives longitude (-PI to PI)
+    // asin(y) gives latitude (-PI/2 to PI/2)
+    float y = clamp(dir.y, -1.0, 1.0);
+    float u = 0.5 + atan(dir.x, dir.z) / (2.0 * PI);
+    float v = 0.5 + asin(y) / PI;
+    return vec2(u, v);
+}
+
 void main() {
     // 1. Sample G-Buffer
     vec4 albedo_sample = texture(u_g_albedo, v_uv);
@@ -86,9 +98,15 @@ void main() {
 
     float depth01 = texture(u_g_depth, v_uv).r;
 
+    vec4 ndc = vec4(v_uv * 2.0 - 1.0, 1.0, 1.0);
+    vec4 far_plane_ws = u_inv_view_proj * ndc;
+    vec3 V_dir = normalize(far_plane_ws.xyz / far_plane_ws.w - u_camera_pos);
+
     // Early out for background
     if (depth01 >= 0.999999) {
-        o_color = vec4(0.0, 0.0, 0.0, 1.0);
+        vec2 sky_uv = dir_to_uv(V_dir);
+        vec3 sky_color = texture(u_sky_lut, sky_uv).rgb;
+        o_color = vec4(sky_color, 1.0);
         return;
     }
 
@@ -157,10 +175,27 @@ void main() {
         Lo += (diffuse + specular) * radiance * NdotL;
     }
 
-    // 4. Ambient / AO
-    // In a full PBR engine, this would be an IBL (Image Based Lighting) lookup.
-    // For now, we use a simple ambient constant multiplied by AO.
-    // vec3 ambient = vec3(0.03) * albedo * ao;
+    // Sun shading
+
+    vec3 L_sun = normalize(-u_sun_direction); // Direction FROM the sun
+    vec3 H_sun = normalize(V + L_sun);
+    float NdotL_sun = max(dot(N, L_sun), 0.0);
+
+    vec3 sun_radiance = vec3(1.0) * 20.0;
+
+    float D_sun = DistributionGGX(N, H_sun, roughness);
+    float G_sun = GeometrySmith(N, V, L_sun, roughness);
+    vec3 F_sun  = fresnelSchlick(max(dot(H_sun, V), 0.0), F0);
+
+    vec3 spec_num_sun = D_sun * G_sun * F_sun;
+    float spec_den_sun = 4.0 * max(dot(N, V), 0.0) * NdotL_sun + 0.0001;
+    vec3 specular_sun = spec_num_sun / spec_den_sun;
+
+    vec3 kS_sun = F_sun;
+    vec3 kD_sun = (vec3(1.0) - kS_sun) * (1.0 - metallic);
+    vec3 diffuse_sun = kD_sun * (albedo / PI);
+
+    Lo += (diffuse_sun + specular_sun) * sun_radiance * NdotL_sun;
     
     vec3 color = Lo;
 
