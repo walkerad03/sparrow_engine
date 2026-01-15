@@ -18,6 +18,7 @@ from sparrow.graphics.graph.resources import (
     TextureResource,
     expect_resource,
 )
+from sparrow.graphics.helpers.nishita import generate_nishita_sky_lut
 from sparrow.graphics.renderer.settings import RaytracingRendererSettings
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
@@ -34,6 +35,7 @@ class RaytracingPass(RenderPass):
 
     _u_inv_view_proj: moderngl.Uniform | None = None
     _u_cam_pos: moderngl.Uniform | None = None
+    _u_sky_lut: moderngl.Texture | None = None
 
     _triangle_buffer: moderngl.Buffer | None = None
     _light_buffer: moderngl.Buffer | None = None
@@ -73,6 +75,21 @@ class RaytracingPass(RenderPass):
         self._u_inv_view_proj: moderngl.Uniform = self._program["u_inv_view_proj"]
         self._u_cam_pos: moderngl.Uniform = self._program["u_cam_pos"]
 
+        sun_to_world = np.array(self.settings.sunlight.direction, dtype=np.float32)
+        world_to_sun = -sun_to_world
+        sky_lut_data = generate_nishita_sky_lut(
+            1024,
+            512,
+            tuple(world_to_sun),
+        )
+
+        self._sky_lut_tex = ctx.texture(
+            (1024, 512),
+            4,
+            data=sky_lut_data,
+            dtype="f4",
+        )
+
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         assert self._program
 
@@ -98,6 +115,13 @@ class RaytracingPass(RenderPass):
 
         self._frame_index += 1
         self._program["u_frame_index"].value = self._frame_index
+
+        if self.settings.sunlight.enabled:
+            self._program["u_sun_direction"].value = self.settings.sunlight.direction
+            self._program["u_sun_color"].value = self.settings.sunlight.color
+            # self._program["u_sky_lut"].value = self._sky_lut_tex
+
+            self._sky_lut_tex.use(location=5)
 
         tex_res = expect_resource(exec_ctx.resources, self.out_texture, TextureResource)
         tex_res.handle.bind_to_image(0, read=True, write=True)

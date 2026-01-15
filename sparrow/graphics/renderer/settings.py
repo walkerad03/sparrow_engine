@@ -1,9 +1,12 @@
 # sparrow/graphics/renderer/settings.py
 from __future__ import annotations
 
+import datetime
 from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
+
+from sparrow.graphics.helpers.nishita import get_sun_dir_from_datetime
 
 
 class PresentScaleMode(str, Enum):
@@ -23,11 +26,26 @@ class ResolutionSettings:
     scale_mode: PresentScaleMode = PresentScaleMode.STRETCH
 
 
+_default_time = datetime.datetime(2023, 10, 27, 15, 0, 0)
+
+
+@dataclass(frozen=True, slots=True)
+class SunlightSettings:
+    """Policy for global directional light."""
+
+    enabled: bool = True
+    direction: tuple[float, float, float] = get_sun_dir_from_datetime(
+        _default_time, 40.71, -74.00
+    )
+    color: tuple[float, float, float] = (1.0, 0.9294, 0.8706)
+
+
 @dataclass(frozen=True, slots=True)
 class RendererSettings(ABC):
     """Base class for all rendering pipeline configurations."""
 
     resolution: ResolutionSettings
+    sunlight: SunlightSettings
 
 
 @dataclass(frozen=True, slots=True)

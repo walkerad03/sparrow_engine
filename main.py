@@ -17,6 +17,7 @@ import math
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import List, Literal
 
@@ -33,6 +34,9 @@ from sparrow.graphics.ecs.frame_submit import (
     RenderFrameInput,
 )
 from sparrow.graphics.graph.builder import RenderGraphBuilder
+from sparrow.graphics.helpers.nishita import (
+    get_sun_dir_from_datetime,
+)
 from sparrow.graphics.pipelines.blit import build_blit_pipeline
 from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.forward import build_forward_pipeline
@@ -42,6 +46,7 @@ from sparrow.graphics.renderer.settings import (
     PresentScaleMode,
     RaytracingRendererSettings,
     ResolutionSettings,
+    SunlightSettings,
 )
 from sparrow.graphics.util.ids import MaterialId, MeshId
 
@@ -206,18 +211,31 @@ def main() -> None:
     gl_version = ctx.version_code
     print(f"OpenGL version {str(gl_version)[0]}.{str(gl_version)[1:]}")
 
-    settings = RaytracingRendererSettings(
-        resolution=ResolutionSettings(
-            logical_width=int(1920 / 2),
-            logical_height=int(1080 / 2),
-            scale_mode=PresentScaleMode.INTEGER_FIT,
-        ),
-        denoiser_enabled=True,
-        samples_per_pixel=1,
-        max_bounces=3,
+    # tz = timezone(timedelta(hours=-5))
+    # dt_now = datetime(2025, 1, 1, 15, 00, tzinfo=tz)
+    dt_now = datetime.now()
+    sun_dir = get_sun_dir_from_datetime(dt_now, 35.9132, -79.0558)
+
+    resolution = ResolutionSettings(
+        logical_width=int(1920 / 2),
+        logical_height=int(1080 / 2),
+        scale_mode=PresentScaleMode.INTEGER_FIT,
     )
 
-    state = AppState(mode="raytrace")
+    sunlight = SunlightSettings(
+        enabled=True,
+        direction=sun_dir,
+    )
+
+    settings = RaytracingRendererSettings(
+        resolution,
+        sunlight,
+        denoiser_enabled=True,
+        samples_per_pixel=1,
+        max_bounces=6,
+    )
+
+    state = AppState(mode="blit")
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:
@@ -238,9 +256,9 @@ def main() -> None:
     )
 
     renderer.material_manager.create(
-        MaterialId("floor"),
+        MaterialId("blackboard"),
         Material(
-            base_color_factor=(0.02, 0.02, 0.02, 1.0),
+            base_color_factor=(0.039, 0.039, 0.039, 1.0),
             metalness=0.0,
             roughness=0.9,
         ),
@@ -264,16 +282,25 @@ def main() -> None:
         ),
     )
 
+    renderer.material_manager.create(
+        MaterialId("bone"),
+        Material(
+            base_color_factor=(0.793, 0.793, 0.664, 1.0),
+            metalness=0.0,
+            roughness=0.9,
+        ),
+    )
+
     draws: List[DrawItem] = [
         DrawItem(
             MeshId("engine.stanford_dragon_lowpoly"),
-            MaterialId("copper"),
+            MaterialId("bone"),
             np.eye(4, dtype=np.float32),
             1,
         ),
         DrawItem(
             MeshId("engine.large_plane"),
-            MaterialId("floor"),
+            MaterialId("blackboard"),
             np.eye(4, dtype=np.float32),
             2,
         ),
