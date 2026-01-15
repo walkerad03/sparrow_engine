@@ -13,32 +13,30 @@ def build_raytracing_pipeline(
     if not isinstance(settings, RaytracingRendererSettings):
         raise TypeError("Expected RaytracingRendererSettings for raytrace pipeline")
 
-    out_tex_rid = builder.add_texture(
+    out_tex = builder.add_texture(
         ResourceId("rt_output"),
         TextureDesc(
             settings.resolution.logical_width,
             settings.resolution.logical_height,
             4,
             "f2",
-            label="RTOutput",
         ),
     )
 
-    pid = PassId("raytrace_step")
     builder.add_pass(
-        pid,
+        PassId("raytrace"),
         RaytracingPass(
-            pass_id=pid,
+            pass_id=PassId("raytrace"),
             settings=settings,
-            out_texture=out_tex_rid,
+            out_texture=out_tex,
         ),
     )
 
-    pid = PassId("present")
     builder.add_pass(
-        pid,
+        PassId("present"),
         TonemapPass(
-            pass_id=pid,
-            hdr_in=out_tex_rid,
+            pass_id=PassId("present"),
+            hdr_in=out_tex,
+            settings=settings,
         ),
     )

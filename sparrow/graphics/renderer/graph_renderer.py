@@ -14,9 +14,7 @@ from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.compilation import compile_render_graph
 from sparrow.graphics.graph.pass_base import RenderServices
 from sparrow.graphics.graph.render_graph import CompiledRenderGraph
-from sparrow.graphics.renderer.settings import (
-    DeferredRendererSettings,  # Rename to RendererSettings preferably
-)
+from sparrow.graphics.renderer.settings import RendererSettings
 from sparrow.graphics.shaders.shader_manager import ShaderManager
 
 # Define the Pipeline Strategy Signature
@@ -26,7 +24,7 @@ PipelineFactory = Callable[[RenderGraphBuilder, int, int], None]
 @dataclass(slots=True)
 class GraphRenderer:
     gl: moderngl.Context
-    settings: DeferredRendererSettings
+    settings: RendererSettings
 
     # Managers (kept the same)
     _shader_mgr: ShaderManager | None = None

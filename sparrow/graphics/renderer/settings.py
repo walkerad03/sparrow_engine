@@ -29,11 +29,10 @@ class ResolutionSettings:
 _default_time = datetime.datetime(2023, 10, 27, 15, 0, 0)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class SunlightSettings:
     """Policy for global directional light."""
 
-    enabled: bool = True
     direction: tuple[float, float, float] = get_sun_dir_from_datetime(
         _default_time, 40.71, -74.00
     )

@@ -1,27 +1,28 @@
 # sparrow/graphics/graph/pass_base.py
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Flag, auto
 from typing import (
     Any,
     Literal,
     Mapping,
     Optional,
-    Protocol,
     Sequence,
-    runtime_checkable,
 )
 
 import moderngl
+import numpy as np
 
-from sparrow.core.components import RenderSettings
 from sparrow.graphics.assets.material_manager import MaterialManager
 from sparrow.graphics.assets.mesh_manager import MeshManager
 from sparrow.graphics.assets.texture_manager import TextureManager
 from sparrow.graphics.ecs.frame_submit import RenderFrameInput
 from sparrow.graphics.graph.resources import GraphResource
+from sparrow.graphics.renderer.settings import RendererSettings
 from sparrow.graphics.shaders.shader_manager import ShaderManager
-from sparrow.graphics.util.ids import PassId, ResourceId, get_pass_fbo_id
+from sparrow.graphics.util.ids import PassId, ResourceId, TextureId, get_pass_fbo_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,8 +113,16 @@ class PassExecutionContext:
     viewport_height: int
 
 
-@runtime_checkable
-class RenderPass(Protocol):
+class PassFeatures(Flag):
+    NONE = 0
+    CAMERA = auto()
+    SUN = auto()
+    RESOLUTION = auto()
+    TIME = auto()
+
+
+@dataclass(slots=True)
+class RenderPass(ABC):
     """
     A render graph pass.
 
@@ -128,7 +137,14 @@ class RenderPass(Protocol):
     """
 
     pass_id: PassId
-    settings: RenderSettings
+    settings: RendererSettings
+
+    features: PassFeatures = PassFeatures.NONE
+
+    _program: Optional[moderngl.Program | moderngl.ComputeShader] = None
+    _uniforms: dict[str, moderngl.Uniform] = field(default_factory=dict)
+
+    _sky_lut_binding: int = 10
 
     @property
     def output_fbo_id(self) -> ResourceId:
@@ -142,8 +158,9 @@ class RenderPass(Protocol):
         If it returns a ResourceId, the compiler uses that as the primary
         color attachment to build the auto-FBO.
         """
-        ...
+        return None
 
+    @abstractmethod
     def build(self) -> PassBuildInfo:
         """Declare resource reads/writes and pass identity for compilation."""
         ...
@@ -156,10 +173,79 @@ class RenderPass(Protocol):
         services: RenderServices,
     ) -> None:
         """
+        Base implementation of resource compilation.
+
         Called after compilation (and any resource allocations) so the pass can
         create pipelines/programs, cache locations, etc.
+
+        Child classes MUST call super().on_graph_compiled() if they override this.
+        Assume that the child class will set self._program prior to running.
         """
-        ...
+        if not self._program:
+            return
+
+        if PassFeatures.CAMERA in self.features:
+            for name in ["u_camera_pos", "u_inv_view_proj", "u_view_proj"]:
+                if name in self._program:
+                    self._uniforms[name] = self._program[name]
+
+        if PassFeatures.SUN in self.features:
+            for name in ["u_sun_direction", "u_sun_color", "u_sky_lut"]:
+                if name in self._program:
+                    self._uniforms[name] = self._program[name]
+
+        if PassFeatures.RESOLUTION in self.features and "u_resolution" in self._program:
+            self._uniforms["u_resolution"] = self._program["u_resolution"]
+
+        if PassFeatures.TIME in self.features and "u_frame_index" in self._program:
+            self._uniforms["u_frame_index"] = self._program["u_frame_index"]
+
+    def execute_base(self, exec_ctx: PassExecutionContext) -> None:
+        """
+        Call this at the START of your child execute() method.
+        Handles all global state uploads.
+        """
+        if not self._program:
+            return
+
+        assert self._program is not None
+
+        services = exec_ctx.services
+
+        # Update camera
+        if PassFeatures.CAMERA in self.features:
+            cam = exec_ctx.frame.camera
+            if "u_camera_pos" in self._uniforms:
+                self._uniforms["u_camera_pos"].value = tuple(cam.position_ws)
+            if "u_inv_view_proj" in self._uniforms:
+                inv_vp = np.linalg.inv(cam.view_proj).astype(np.float32)
+                self._uniforms["u_inv_view_proj"].write(inv_vp.T.tobytes())
+            if "u_view_proj" in self._uniforms:
+                vp = cam.view_proj.astype(np.float32)
+                self._uniforms["u_view_proj"].write(vp.T.tobytes())
+
+        # Directional lighting updates
+        if PassFeatures.SUN in self.features:
+            sun = self.settings.sunlight
+            if "u_sun_direction" in self._uniforms:
+                self._uniforms["u_sun_direction"].value = tuple(sun.direction)
+            if "u_sun_color" in self._uniforms:
+                self._uniforms["u_sun_color"].value = tuple(sun.color)
+
+            if "u_sky_lut" in self._uniforms:
+                tex_id = TextureId("engine.sky_lut")
+                sky_handle = services.texture_manager.get(tex_id)
+                sky_handle.texture.use(location=self._sky_lut_binding)
+                self._uniforms["u_sky_lut"].value = self._sky_lut_binding
+
+        if (
+            PassFeatures.RESOLUTION in self.features
+            and "u_resolution" in self._uniforms
+        ):
+            self._uniforms["u_resolution"].value = (
+                exec_ctx.viewport_width,
+                exec_ctx.viewport_height,
+            )
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         """Execute the pass for the current frame."""

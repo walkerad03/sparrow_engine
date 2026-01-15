@@ -9,6 +9,7 @@ import numpy as np
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
+    PassFeatures,
     PassResourceUse,
     RenderPass,
     RenderServices,
@@ -18,40 +19,29 @@ from sparrow.graphics.graph.resources import (
     TextureResource,
     expect_resource,
 )
-from sparrow.graphics.helpers.nishita import generate_nishita_sky_lut
 from sparrow.graphics.renderer.settings import RaytracingRendererSettings
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
 from sparrow.graphics.util.ids import MaterialId, MeshId, PassId, ResourceId, ShaderId
 
 
-@dataclass(slots=True)
+@dataclass(kw_only=True)
 class RaytracingPass(RenderPass):
     pass_id: PassId
     out_texture: ResourceId
     settings: RaytracingRendererSettings
 
-    _program: moderngl.ComputeShader | None = None
-
-    _u_inv_view_proj: moderngl.Uniform | None = None
-    _u_cam_pos: moderngl.Uniform | None = None
-    _u_sky_lut: moderngl.Texture | None = None
+    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.SUN | PassFeatures.TIME
 
     _triangle_buffer: moderngl.Buffer | None = None
     _light_buffer: moderngl.Buffer | None = None
 
-    _frame_index: int = 0
-
-    @property
-    def output_target(self) -> ResourceId | None:
-        return self.out_texture
-
     def build(self) -> PassBuildInfo:
         return PassBuildInfo(
             pass_id=self.pass_id,
-            name="Raytrace Compute",
+            name="Raytrace",
             reads=[],
-            writes=[PassResourceUse(self.out_texture, "write", "compute")],
+            writes=[PassResourceUse(self.out_texture, "write", "storage", binding=0)],
         )
 
     def on_graph_compiled(
@@ -66,43 +56,36 @@ class RaytracingPass(RenderPass):
             stages=ShaderStages(
                 compute="sparrow/graphics/shaders/default/raytrace.comp"
             ),
-            label="RaytraceCompute",
+            label="Raytrace",
         )
-        prog = services.shader_manager.get(req).program
-        assert isinstance(prog, moderngl.ComputeShader)
+        self._program = services.shader_manager.get(req).program
 
-        self._program = prog
-        self._u_inv_view_proj: moderngl.Uniform = self._program["u_inv_view_proj"]
-        self._u_cam_pos: moderngl.Uniform = self._program["u_cam_pos"]
+        super().on_graph_compiled(ctx=ctx, resources=resources, services=services)
 
-        sun_to_world = np.array(self.settings.sunlight.direction, dtype=np.float32)
-        world_to_sun = -sun_to_world
-        sky_lut_data = generate_nishita_sky_lut(
-            1024,
-            512,
-            tuple(world_to_sun),
-        )
-
-        self._sky_lut_tex = ctx.texture(
-            (1024, 512),
-            4,
-            data=sky_lut_data,
-            dtype="f4",
-        )
+        pass
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
-        assert self._program
+        self.execute_base(exec_ctx)
+        assert isinstance(self._program, moderngl.ComputeShader)
 
-        # setup camera and image binding
-        frame = exec_ctx.frame
+        resources = exec_ctx.resources
+
+        out_res = expect_resource(resources, self.out_texture, TextureResource)
+        out_res.handle.bind_to_image(0, read=True, write=True)
+
+        self._update_buffers(exec_ctx)
+
+        w, h = exec_ctx.viewport_width, exec_ctx.viewport_height
+        gw, gh = 16, 16
+        nx = (w + gw - 1) // gw
+        ny = (h + gh - 1) // gh
+
+        self._program.run(nx, ny, 1)
+
+    def _update_buffers(self, exec_ctx: PassExecutionContext) -> None:
+        triangle_data = []
         services = exec_ctx.services
-
-        if self._u_inv_view_proj:
-            inv_vp = np.linalg.inv(frame.camera.view_proj)
-            self._u_inv_view_proj.write(inv_vp.T.tobytes())
-
-        if self._u_cam_pos:
-            self._u_cam_pos.value = tuple(frame.camera.position_ws)
+        assert self._program
 
         if "u_max_bounces" in self._program:
             self._program["u_max_bounces"].value = self.settings.max_bounces
@@ -112,21 +95,6 @@ class RaytracingPass(RenderPass):
 
         if "u_denoiser_enabled" in self._program:
             self._program["u_denoiser_enabled"].value = self.settings.denoiser_enabled
-
-        self._frame_index += 1
-        self._program["u_frame_index"].value = self._frame_index
-
-        if self.settings.sunlight.enabled:
-            self._program["u_sun_direction"].value = self.settings.sunlight.direction
-            self._program["u_sun_color"].value = self.settings.sunlight.color
-            # self._program["u_sky_lut"].value = self._sky_lut_tex
-
-            self._sky_lut_tex.use(location=5)
-
-        tex_res = expect_resource(exec_ctx.resources, self.out_texture, TextureResource)
-        tex_res.handle.bind_to_image(0, read=True, write=True)
-
-        triangle_data = []
 
         for draw in exec_ctx.frame.draws:
             mesh_id = MeshId(draw.mesh_id)
@@ -192,7 +160,6 @@ class RaytracingPass(RenderPass):
 
         if triangle_data:
             raw_data = struct.pack(f"{len(triangle_data)}f", *triangle_data)
-
             if self._triangle_buffer is None or self._triangle_buffer.size < len(
                 raw_data
             ):
@@ -205,15 +172,13 @@ class RaytracingPass(RenderPass):
             self._triangle_buffer.bind_to_storage_buffer(binding=1)
             self._program["u_triangle_count"].value = len(triangle_data) // 16
 
-        # Load light data
+        # Lights
         light_data = []
-
         for light in exec_ctx.frame.point_lights:
             light_data.extend(
                 [*light.position_ws, 0.0, *light.color_rgb, light.intensity]
             )
 
-        # Upload light to buffer
         if light_data:
             raw_lights = struct.pack(f"{len(light_data)}f", *light_data)
             if self._light_buffer is None or self._light_buffer.size < len(raw_lights):
@@ -225,8 +190,3 @@ class RaytracingPass(RenderPass):
 
             self._light_buffer.bind_to_storage_buffer(binding=2)
             self._program["u_light_count"].value = len(exec_ctx.frame.point_lights)
-
-        # Render
-        gx = (tex_res.desc.width + 15) // 16
-        gy = (tex_res.desc.height + 15) // 16
-        self._program.run(gx, gy, 1)

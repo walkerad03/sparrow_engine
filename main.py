@@ -17,7 +17,7 @@ import math
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Literal
 
@@ -34,16 +34,10 @@ from sparrow.graphics.ecs.frame_submit import (
     RenderFrameInput,
 )
 from sparrow.graphics.graph.builder import RenderGraphBuilder
-from sparrow.graphics.helpers.nishita import (
-    get_sun_dir_from_datetime,
-)
-from sparrow.graphics.pipelines.blit import build_blit_pipeline
-from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
-from sparrow.graphics.pipelines.forward import build_forward_pipeline
+from sparrow.graphics.helpers.nishita import get_sun_dir_from_datetime
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.renderer import Renderer
 from sparrow.graphics.renderer.settings import (
-    DeferredRendererSettings,
     PresentScaleMode,
     RaytracingRendererSettings,
     ResolutionSettings,
@@ -189,9 +183,9 @@ def _handle_pygame_events(screen) -> None:
 
 PIPELINES = {
     "raytrace": build_raytracing_pipeline,
-    "deferred": build_deferred_pipeline,
-    "forward": build_forward_pipeline,
-    "blit": build_blit_pipeline,
+    # "deferred": build_deferred_pipeline,
+    # "forward": build_forward_pipeline,
+    # "blit": build_blit_pipeline,
 }
 
 
@@ -212,33 +206,25 @@ def main() -> None:
     gl_version = ctx.version_code
     print(f"OpenGL version {str(gl_version)[0]}.{str(gl_version)[1:]}")
 
-    # tz = timezone(timedelta(hours=-5))
-    # dt_now = datetime(2025, 1, 1, 15, 00, tzinfo=tz)
-    dt_now = datetime.now()
-    sun_dir = get_sun_dir_from_datetime(dt_now, 35.9132, -79.0558)
-
     resolution = ResolutionSettings(
         logical_width=int(1920 / 2),
         logical_height=int(1080 / 2),
         scale_mode=PresentScaleMode.INTEGER_FIT,
     )
 
-    sunlight = SunlightSettings(
-        enabled=True,
-        direction=sun_dir,
-    )
+    sim_time = datetime.now(timezone(timedelta(hours=-5)))
+    sun_dir = get_sun_dir_from_datetime(sim_time, 35.91, -79.05)
+    sunlight = SunlightSettings(direction=sun_dir)
 
     settings = RaytracingRendererSettings(
         resolution,
         sunlight,
-        denoiser_enabled=True,
+        denoiser_enabled=False,
         samples_per_pixel=1,
-        max_bounces=6,
+        max_bounces=4,
     )
 
-    settings = DeferredRendererSettings(resolution, sunlight)
-
-    state = AppState(mode="deferred")
+    state = AppState(mode="raytrace")
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:
@@ -250,38 +236,11 @@ def main() -> None:
     renderer.initialize(sync_pipeline)
 
     renderer.material_manager.create(
-        MaterialId("stainless_steel"),
-        Material(
-            base_color_factor=(0.669, 0.639, 0.598, 1.0),
-            metalness=1.0,
-            roughness=0.0,
-        ),
-    )
-
-    renderer.material_manager.create(
         MaterialId("blackboard"),
         Material(
             base_color_factor=(0.039, 0.039, 0.039, 1.0),
             metalness=0.0,
             roughness=0.9,
-        ),
-    )
-
-    renderer.material_manager.create(
-        MaterialId("gold"),
-        Material(
-            base_color_factor=(1.059, 0.773, 0.307, 1.0),
-            metalness=1.0,
-            roughness=0.0,
-        ),
-    )
-
-    renderer.material_manager.create(
-        MaterialId("copper"),
-        Material(
-            base_color_factor=(0.932, 0.623, 0.522, 1.0),
-            metalness=1.0,
-            roughness=0.0,
         ),
     )
 
@@ -296,24 +255,32 @@ def main() -> None:
 
     draws: List[DrawItem] = [
         DrawItem(
-            MeshId("engine.stanford_dragon_lowpoly"),
+            MeshId("engine.cube"),
             MaterialId("bone"),
             np.eye(4, dtype=np.float32),
             1,
+        ),
+        DrawItem(
+            MeshId("engine.large_plane"),
+            MaterialId("blackboard"),
+            np.eye(4, dtype=np.float32),
+            2,
         ),
     ]
 
     point_lights = []
 
-    # Static camera data
-    eye = np.array([2.0, 0.75, -2.0], dtype=np.float32)
-    target = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-    fov = 60.0
-    near = 0.1
-    far = 100.0
+    cam = make_simple_camera(
+        eye=np.array([2.0, 0.75, -4.0], dtype=np.float32),
+        target=np.array([0.0, 0.0, 0.0], dtype=np.float32),
+        fov=30.0,
+        w=window_width,
+        h=window_height,
+        near=0.1,
+        far=100.0,
+    )
 
     running = True
-    t = 0
     while running:
         _handle_pygame_events(screen)
 
@@ -324,16 +291,6 @@ def main() -> None:
 
         # TODO: Poll input, window events, resize handling.
         # If resized, update renderer settings and rebuild graph or trigger resize path.
-
-        cam = make_simple_camera(
-            eye=eye,
-            target=target,
-            fov=fov,
-            w=window_width,
-            h=window_height,
-            near=near,
-            far=far,
-        )
 
         frame = RenderFrameInput(
             frame_index=state.frame_index,
@@ -349,10 +306,6 @@ def main() -> None:
         renderer.render_frame(frame)
         pygame.display.flip()
         clock.tick(60)
-        t += 1
-
-        if t == 60 * 2:
-            pygame.image.save(screen, "frame.png")
 
 
 if __name__ == "__main__":

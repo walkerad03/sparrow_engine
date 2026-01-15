@@ -24,7 +24,7 @@ from sparrow.graphics.shaders.shader_manager import ShaderRequest
 from sparrow.graphics.util.ids import PassId, ResourceId, ShaderId
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class TonemapPass(RenderPass):
     """
     Trivial fullscreen blit pass.
