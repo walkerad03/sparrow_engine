@@ -176,8 +176,7 @@ void main() {
     }
 
     // Sun shading
-
-    vec3 L_sun = normalize(-u_sun_direction); // Direction FROM the sun
+    vec3 L_sun = normalize(-u_sun_direction);
     vec3 H_sun = normalize(V + L_sun);
     float NdotL_sun = max(dot(N, L_sun), 0.0);
 

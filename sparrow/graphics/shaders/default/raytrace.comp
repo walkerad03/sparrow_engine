@@ -4,7 +4,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba16f, binding = 0) uniform image2D img_output; // Use rgba16f to match the "f2" dtype in TextureDesc
 
 uniform mat4 u_inv_view_proj;
-uniform vec3 u_cam_pos;
+uniform vec3 u_camera_pos;
 uniform int u_max_bounces;
 uniform int u_samples_per_pixel;
 uniform int u_frame_index;
@@ -132,7 +132,7 @@ void main() {
         vec3 world_target = target.xyz / target.w;
 
         Ray current_ray;
-        current_ray.origin = u_cam_pos;
+        current_ray.origin = u_camera_pos;
         current_ray.dir = normalize(world_target - current_ray.origin);
 
         vec3 throughput = vec3(1.0);

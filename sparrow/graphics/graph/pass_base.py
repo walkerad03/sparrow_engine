@@ -160,6 +160,17 @@ class RenderPass(ABC):
         """
         return None
 
+    def _get_uniform(self, name: str) -> moderngl.Uniform | None:
+        if not self._program:
+            return None
+        obj = self._program.get(name, None)
+        return obj if isinstance(obj, moderngl.Uniform) else None
+
+    def _set_sampler(self, name: str, unit: int) -> None:
+        u = self._get_uniform(name)
+        if u is not None:
+            u.value = unit
+
     @abstractmethod
     def build(self) -> PassBuildInfo:
         """Declare resource reads/writes and pass identity for compilation."""
@@ -211,6 +222,7 @@ class RenderPass(ABC):
         assert self._program is not None
 
         services = exec_ctx.services
+        frame = exec_ctx.frame
 
         # Update camera
         if PassFeatures.CAMERA in self.features:
@@ -246,6 +258,9 @@ class RenderPass(ABC):
                 exec_ctx.viewport_width,
                 exec_ctx.viewport_height,
             )
+
+        if PassFeatures.TIME in self.features and "u_frame_index" in self._uniforms:
+            self._uniforms["u_frame_index"].value = frame.frame_index
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         """Execute the pass for the current frame."""

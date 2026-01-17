@@ -3,7 +3,9 @@ from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.resources import TextureDesc
 from sparrow.graphics.passes.raytracing import RaytracingPass
 from sparrow.graphics.passes.tonemap import TonemapPass
-from sparrow.graphics.renderer.settings import RaytracingRendererSettings
+from sparrow.graphics.renderer.settings import (
+    RaytracingRendererSettings,
+)
 from sparrow.graphics.util.ids import PassId, ResourceId
 
 

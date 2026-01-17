@@ -9,6 +9,7 @@ import moderngl
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
+    PassFeatures,
     PassResourceUse,
     RenderPass,
     RenderServices,
@@ -18,12 +19,13 @@ from sparrow.graphics.graph.resources import (
     GraphResource,
     expect_resource,
 )
+from sparrow.graphics.renderer.settings import DeferredRendererSettings
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
 from sparrow.graphics.util.ids import MaterialId, MeshId, PassId, ResourceId, ShaderId
 
 
-@dataclass(slots=True)
+@dataclass(kw_only=True)
 class GBufferPass(RenderPass):
     """
     Fills GBuffer attachments from opaque geometry.
@@ -36,15 +38,16 @@ class GBufferPass(RenderPass):
     """
 
     pass_id: PassId
+    settings: DeferredRendererSettings
+
     g_albedo: ResourceId
     g_normal: ResourceId
     g_orm: ResourceId
     g_depth: ResourceId
 
-    _program: moderngl.Program | None = None
-    _u_model: moderngl.Uniform | None = None
-    _u_view_proj: moderngl.Uniform | None = None
+    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.RESOLUTION
 
+    _u_model: moderngl.Uniform | None = None
     _u_base_color: moderngl.Uniform | None = None
     _u_roughness: moderngl.Uniform | None = None
     _u_metalness: moderngl.Uniform | None = None
@@ -75,8 +78,6 @@ class GBufferPass(RenderPass):
         services: RenderServices,
     ) -> None:
         """Compile GBuffer shader program and cache uniform/attrib locations."""
-        shader_mgr = services.shader_manager
-
         req = ShaderRequest(
             shader_id=ShaderId("gbuffer"),
             stages=ShaderStages(
@@ -86,42 +87,43 @@ class GBufferPass(RenderPass):
             label="GBuffer",
         )
 
-        prog = shader_mgr.get(req).program
+        prog = services.shader_manager.get(req).program
+        if not isinstance(prog, moderngl.Program):
+            raise RuntimeError("GBufferPass requires a graphics Program")
 
-        assert isinstance(prog, moderngl.Program)
-        assert isinstance(prog["u_model"], moderngl.Uniform)
-        assert isinstance(prog["u_view_proj"], moderngl.Uniform)
+        if "u_model" not in prog:
+            raise RuntimeError("Missing uniform u_model")
+        self._u_model: moderngl.Uniform = prog["u_model"]
+
+        self._u_base_color: moderngl.Uniform = prog.get("u_base_color", None)
+        self._u_roughness: moderngl.Uniform = prog.get("u_roughness", None)
+        self._u_metalness: moderngl.Uniform = prog.get("u_metalness", None)
 
         self._program = prog
-        self._u_model = prog["u_model"]
-        self._u_view_proj = prog["u_view_proj"]
-
-        self._u_base_color: moderngl.Uniform = self._program["u_base_color"]
-        self._u_roughness: moderngl.Uniform = self._program["u_roughness"]
-        self._u_metalness: moderngl.Uniform = self._program["u_metalness"]
+        super().on_graph_compiled(ctx=ctx, resources=resources, services=services)
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         """Render draw list into the GBuffer framebuffer."""
+        self.execute_base(exec_ctx)
+
         gl = exec_ctx.gl
 
         fbo_res = expect_resource(
-            exec_ctx.resources,
-            self.output_fbo_id,
-            FramebufferResource,
+            exec_ctx.resources, self.output_fbo_id, FramebufferResource
         )
         fbo = fbo_res.handle
-
         fbo.use()
+
+        gl.viewport = (0, 0, fbo.size[0], fbo.size[1])
+
         gl.enable(moderngl.DEPTH_TEST)
+        gl.disable(moderngl.BLEND)
         gl.clear()
 
-        services = exec_ctx.services
-
         assert isinstance(self._program, moderngl.Program)
-        assert self._u_model and self._u_view_proj
-        assert self._u_base_color and self._u_roughness and self._u_metalness
+        assert self._u_model is not None
 
-        self._u_view_proj.write(exec_ctx.frame.camera.view_proj.T.tobytes())
+        services = exec_ctx.services
 
         for draw in exec_ctx.frame.draws:
             mesh_id = MeshId(draw.mesh_id)
@@ -131,9 +133,14 @@ class GBufferPass(RenderPass):
 
             self._u_model.write(draw.model.T.tobytes())
 
-            self._u_base_color.value = material.base_color_factor
-            self._u_roughness.value = material.roughness
-            self._u_metalness.value = material.metalness
+            if self._u_base_color is not None and hasattr(
+                material, "base_color_factor"
+            ):
+                self._u_base_color.value = material.base_color_factor
+            if self._u_roughness is not None and hasattr(material, "roughness"):
+                self._u_roughness.value = material.roughness
+            if self._u_metalness is not None and hasattr(material, "metalness"):
+                self._u_metalness.value = material.metalness
 
             vao = services.mesh_manager.vao_for(mesh_id, self._program)
             vao.render()
@@ -141,3 +148,7 @@ class GBufferPass(RenderPass):
     def on_graph_destroyed(self) -> None:
         """Release any cached state owned by the pass (if applicable)."""
         self._program = None
+        self._u_model = None
+        self._u_base_color = None
+        self._u_roughness = None
+        self._u_metalness = None

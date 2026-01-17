@@ -35,11 +35,12 @@ from sparrow.graphics.ecs.frame_submit import (
 )
 from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.helpers.nishita import get_sun_dir_from_datetime
+from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.renderer import Renderer
 from sparrow.graphics.renderer.settings import (
+    DeferredRendererSettings,
     PresentScaleMode,
-    RaytracingRendererSettings,
     ResolutionSettings,
     SunlightSettings,
 )
@@ -183,7 +184,7 @@ def _handle_pygame_events(screen) -> None:
 
 PIPELINES = {
     "raytrace": build_raytracing_pipeline,
-    # "deferred": build_deferred_pipeline,
+    "deferred": build_deferred_pipeline,
     # "forward": build_forward_pipeline,
     # "blit": build_blit_pipeline,
 }
@@ -199,6 +200,7 @@ def main() -> None:
     screen = pygame.display.set_mode(
         (window_width, window_height),
         pygame.OPENGL | pygame.DOUBLEBUF,
+        pygame.RESIZABLE,
     )
     clock = pygame.Clock()
 
@@ -216,15 +218,9 @@ def main() -> None:
     sun_dir = get_sun_dir_from_datetime(sim_time, 35.91, -79.05)
     sunlight = SunlightSettings(direction=sun_dir)
 
-    settings = RaytracingRendererSettings(
-        resolution,
-        sunlight,
-        denoiser_enabled=False,
-        samples_per_pixel=1,
-        max_bounces=4,
-    )
+    settings = DeferredRendererSettings(resolution, sunlight)
 
-    state = AppState(mode="raytrace")
+    state = AppState(mode="deferred")
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:
@@ -273,7 +269,7 @@ def main() -> None:
     cam = make_simple_camera(
         eye=np.array([2.0, 0.75, -4.0], dtype=np.float32),
         target=np.array([0.0, 0.0, 0.0], dtype=np.float32),
-        fov=30.0,
+        fov=60.0,
         w=window_width,
         h=window_height,
         near=0.1,

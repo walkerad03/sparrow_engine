@@ -62,8 +62,6 @@ class RaytracingPass(RenderPass):
 
         super().on_graph_compiled(ctx=ctx, resources=resources, services=services)
 
-        pass
-
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         self.execute_base(exec_ctx)
         assert isinstance(self._program, moderngl.ComputeShader)
