@@ -39,8 +39,8 @@ from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.renderer import Renderer
 from sparrow.graphics.renderer.settings import (
-    DeferredRendererSettings,
     PresentScaleMode,
+    RaytracingRendererSettings,
     ResolutionSettings,
     SunlightSettings,
 )
@@ -199,8 +199,7 @@ def main() -> None:
     pygame.init()
     screen = pygame.display.set_mode(
         (window_width, window_height),
-        pygame.OPENGL | pygame.DOUBLEBUF,
-        pygame.RESIZABLE,
+        pygame.OPENGL | pygame.DOUBLEBUF | pygame.RESIZABLE,
     )
     clock = pygame.Clock()
 
@@ -209,18 +208,24 @@ def main() -> None:
     print(f"OpenGL version {str(gl_version)[0]}.{str(gl_version)[1:]}")
 
     resolution = ResolutionSettings(
-        logical_width=int(1920 / 2),
-        logical_height=int(1080 / 2),
+        logical_width=int(1920 / 1),
+        logical_height=int(1080 / 1),
         scale_mode=PresentScaleMode.INTEGER_FIT,
     )
 
-    sim_time = datetime.now(timezone(timedelta(hours=-5)))
-    sun_dir = get_sun_dir_from_datetime(sim_time, 35.91, -79.05)
-    sunlight = SunlightSettings(direction=sun_dir)
+    sun_dir = get_sun_dir_from_datetime(
+        dt=datetime(2026, 6, 17, 19, 0, 0, tzinfo=timezone(timedelta(hours=-5))),
+        lat=35.9243051,
+        long=-79.0555446,
+    )
 
-    settings = DeferredRendererSettings(resolution, sunlight)
+    sunlight = SunlightSettings(
+        direction=sun_dir,
+    )
 
-    state = AppState(mode="deferred")
+    settings = RaytracingRendererSettings(resolution, sunlight)
+
+    state = AppState(mode="raytrace")
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:
@@ -258,7 +263,7 @@ def main() -> None:
         ),
         DrawItem(
             MeshId("engine.large_plane"),
-            MaterialId("blackboard"),
+            MaterialId("bone"),
             np.eye(4, dtype=np.float32),
             2,
         ),

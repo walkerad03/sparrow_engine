@@ -6,7 +6,7 @@ from typing import Dict
 
 import moderngl
 
-from sparrow.graphics.helpers.nishita import generate_nishita_sky_lut
+from sparrow.graphics.helpers.spectral_sky import generate_spectral_sky_lut
 from sparrow.graphics.util.ids import TextureId
 
 
@@ -28,10 +28,10 @@ class TextureManager:
         self._load_engine_defaults()
 
     def _load_engine_defaults(self) -> None:
-        sky_data = generate_nishita_sky_lut(
+        sky_data = generate_spectral_sky_lut(
             width=512,
             height=256,
-            sun_dir=(0.0, 1.0, 0.0),  # Default: Noon
+            # sun_dir=(0.0, 1.0, 0.0),  # Default: Noon
         )
 
         self.create_from_bytes(

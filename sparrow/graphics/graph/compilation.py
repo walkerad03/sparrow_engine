@@ -215,8 +215,8 @@ def _allocate_pass_framebuffers(
 
         info = pass_infos[pid]
 
-        color_rids = [u.resource for u in info.writes if u.stage == "color"]
-        depth_rid = next((u.resource for u in info.writes if u.stage == "depth"), None)
+        color_rids: list[ResourceId] = []
+        depth_rid: ResourceId | None = None
 
         for use in info.writes:
             if not _is_write(use.access):
@@ -224,7 +224,7 @@ def _allocate_pass_framebuffers(
             if use.stage == "color":
                 color_rids.append(use.resource)
             elif use.stage == "depth":
-                depth_rid: ResourceId = use.resource
+                depth_rid = use.resource
 
         if not color_rids and depth_rid is None:
             continue  # compute-only pass or pass writing only buffers, etc.

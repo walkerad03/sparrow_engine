@@ -72,11 +72,11 @@ class MeshManager:
             label="Large Plane",
         )
 
-        """ self.create(
+        self.create(
             MeshId("engine.stanford_dragon_lowpoly"),
             load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon_decimated.obj"),
             label="Stanford Dragon (Low Poly)",
-        ) """
+        )
 
     def create(self, mesh_id: MeshId, data: MeshData, *, label: str = "") -> MeshHandle:
         """Upload a mesh and store it under mesh_id."""
