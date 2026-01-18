@@ -144,7 +144,7 @@ class RenderPass(ABC):
     _program: Optional[moderngl.Program | moderngl.ComputeShader] = None
     _uniforms: dict[str, moderngl.Uniform] = field(default_factory=dict)
 
-    _sky_lut_binding: int = 10
+    _sky_lut_binding: int = 5
 
     @property
     def output_fbo_id(self) -> ResourceId:

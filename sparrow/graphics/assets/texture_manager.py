@@ -29,16 +29,16 @@ class TextureManager:
 
     def _load_engine_defaults(self) -> None:
         sky_data = generate_nishita_sky_lut(
-            width=1024,
-            height=512,
+            width=512,
+            height=256,
             sun_dir=(0.0, 1.0, 0.0),  # Default: Noon
         )
 
         self.create_from_bytes(
             TextureId("engine.sky_lut"),
             data=sky_data,
-            width=1024,
-            height=512,
+            width=512,
+            height=256,
             components=4,
             dtype="f4",
             label="Default Sky LUT",

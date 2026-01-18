@@ -43,7 +43,7 @@ class TonemapPass(RenderPass):
 
     hdr_in: ResourceId
 
-    features: PassFeatures = PassFeatures.RESOLUTION
+    features: PassFeatures = PassFeatures.NONE
 
     _vao: moderngl.VertexArray | None = None
     _vbo: moderngl.Buffer | None = None

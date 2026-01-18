@@ -33,11 +33,13 @@ class MeshManager:
         self._load_engine_defaults()
 
     def _load_engine_defaults(self) -> None:
+        """
         self.create(
             MeshId("engine.suzanne"),
             load_obj("sparrow/graphics/meshes/default/suzanne.obj"),
             label="Suzanne",
         )
+        """
 
         self.create(
             MeshId("engine.cube"),
@@ -45,6 +47,7 @@ class MeshManager:
             label="Cube",
         )
 
+        """
         self.create(
             MeshId("engine.dense_icosphere"),
             load_obj("sparrow/graphics/meshes/default/dense_icosphere.obj"),
@@ -62,18 +65,18 @@ class MeshManager:
             load_obj("sparrow/graphics/meshes/default/stanford-bunny.obj"),
             label="Stanford Bunny",
         )
-
+        """
         self.create(
             MeshId("engine.large_plane"),
             load_obj("sparrow/graphics/meshes/default/large_plane.obj"),
             label="Large Plane",
         )
 
-        self.create(
+        """ self.create(
             MeshId("engine.stanford_dragon_lowpoly"),
             load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon_decimated.obj"),
             label="Stanford Dragon (Low Poly)",
-        )
+        ) """
 
     def create(self, mesh_id: MeshId, data: MeshData, *, label: str = "") -> MeshHandle:
         """Upload a mesh and store it under mesh_id."""

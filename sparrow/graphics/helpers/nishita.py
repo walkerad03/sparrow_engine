@@ -8,13 +8,18 @@ R_PLANET = 6360e3
 R_ATMOS = 6420e3
 
 # Rayleigh scattering coefficients
-BETA_R = np.array([5.8e-6, 13.5e-6, 33.1e-6])  # RGB
+BETA_R = np.array([5.802e-6, 13.558e-6, 33.100e-6])  # RGB
 H_R = 8000.0  # Scale height (meters)
 
 # Mie scattering coefficients (Aerosols/Dust)
 BETA_M = 21e-6
 H_M = 1200.0  # Scale height
 MIE_G = 0.76  # Directionality (forward scattering)
+
+# Ozone
+BETA_O = np.array([0.650e-6, 1.881e-6, 0.085e-6])
+H_O_CENTER = 25000.0  # Ozone layer is concentrated at 25km up
+H_O_WIDTH = 15000.0  # Width of the layer
 
 
 def ray_sphere_intersect(orig, dir, radius):
@@ -34,7 +39,24 @@ def ray_sphere_intersect(orig, dir, radius):
     t0 = -b - sqrt_delta
     t1 = -b + sqrt_delta
 
+    t0 = np.maximum(0.0, t0)
+
     return t0, t1, mask
+
+
+def get_density_at_height(height):
+    """
+    Returns density coefficients for Rayleigh, Mie, and Ozone at a given height.
+    """
+    # Rayleigh & Mie (Exponential decay)
+    hr = np.exp(-height / H_R)
+    hm = np.exp(-height / H_M)
+
+    # Ozone (Tent/Gaussian distribution centered at 25km)
+    # Simple triangular distribution approximation
+    ho = np.maximum(0.0, 1.0 - np.abs(height - H_O_CENTER) / H_O_WIDTH)
+
+    return hr, hm, ho
 
 
 def get_sun_dir_from_datetime(
@@ -94,7 +116,7 @@ def generate_nishita_sky_lut(
     width: int = 1024,
     height: int = 512,
     sun_dir: tuple[float, float, float] = (0.0, 1.0, 0.0),
-    num_samples: int = 16,
+    num_samples: int = 32,
 ) -> bytes:
     """
     Generate a raw float32 byte buffer of an Equirectangular Skybox.
@@ -118,42 +140,47 @@ def generate_nishita_sky_lut(
 
     view_dirs = np.stack([dir_x, dir_y, dir_z], axis=-1)
 
-    cam_pos = np.array([0, R_PLANET + 5000.0, 0], dtype=np.float32)
+    cam_pos = np.array([0, R_PLANET + 1500.0, 0], dtype=np.float32)
     sun_dir_np = np.array(sun_dir, dtype=np.float32)
 
-    t0, t1, hit = ray_sphere_intersect(cam_pos, view_dirs, R_ATMOS)
+    t0, t1, valid_mask = ray_sphere_intersect(cam_pos, view_dirs, R_ATMOS)
 
     ray_len = t1
     step_size = ray_len / num_samples
 
     optical_depth_r = np.zeros_like(t1)
     optical_depth_m = np.zeros_like(t1)
+    optical_depth_o = np.zeros_like(t1)
+
     total_r = np.zeros((*t1.shape, 3), dtype=np.float32)
     total_m = np.zeros((*t1.shape, 3), dtype=np.float32)
 
     for i in range(num_samples):
-        sample_pos = cam_pos + view_dirs * (step_size[..., np.newaxis] * (i + 0.5))
-        height_i = np.linalg.norm(sample_pos, axis=-1) - R_PLANET
+        sample_dist = step_size * (i + 0.5)
+        sample_pos = cam_pos + view_dirs * sample_dist[..., np.newaxis]
 
-        hr = np.exp(-height_i / H_R) * step_size
-        hm = np.exp(-height_i / H_M) * step_size
+        sample_height = np.linalg.norm(sample_pos, axis=-1) - R_PLANET
 
-        optical_depth_r += hr
-        optical_depth_m += hm
+        hr, hm, ho = get_density_at_height(sample_height)
 
         t0_l, t1_l, _ = ray_sphere_intersect(sample_pos, sun_dir_np, R_ATMOS)
 
-        light_depth_r = np.exp(-height_i / H_R) * t1_l
-        light_depth_m = np.exp(-height_i / H_M) * t1_l
+        light_depth_r = hr * t1_l
+        light_depth_m = hm * t1_l
+        light_depth_o = ho * t1_l
 
-        tau = BETA_R * (
-            optical_depth_r[..., np.newaxis] + light_depth_r[..., np.newaxis]
-        ) + BETA_M * 1.1 * (
-            optical_depth_m[..., np.newaxis] + light_depth_m[..., np.newaxis]
+        tau = (
+            BETA_R * (optical_depth_r[..., np.newaxis] + light_depth_r[..., np.newaxis])
+            + BETA_M
+            * 1.1
+            * (optical_depth_m[..., np.newaxis] + light_depth_m[..., np.newaxis])
+            + BETA_O
+            * (optical_depth_o[..., np.newaxis] + light_depth_o[..., np.newaxis])
         )
+
         attenuation = np.exp(-tau)
-        total_r += attenuation * hr[..., np.newaxis]
-        total_m += attenuation * hm[..., np.newaxis]
+        total_r += attenuation * hr[..., np.newaxis] * step_size[..., np.newaxis]
+        total_m += attenuation * hm[..., np.newaxis] * step_size[..., np.newaxis]
 
     mu = np.sum(view_dirs * sun_dir_np, axis=-1)
 
@@ -166,17 +193,20 @@ def generate_nishita_sky_lut(
         / ((2.0 + g**2) * (1.0 + g**2 - 2.0 * g * mu) ** 1.5)
     )
 
-    sky_color = (
+    lin_color = (
         total_r * BETA_R * phase_r[..., np.newaxis]
         + total_m * BETA_M * phase_m[..., np.newaxis]
     )
 
-    sky_color *= 20.0
+    ms_factor = 0.5 * (1.0 - np.exp(-optical_depth_r))
+    lin_color += lin_color * ms_factor[..., np.newaxis]
 
-    mask = view_dirs[..., 1] < -0.05  # Small bias
-    sky_color[mask] = 0.0
+    lin_color *= 20.0
+
+    mask = view_dirs[..., 1] < -0.02
+    lin_color[mask] = 0.0
 
     alpha = np.ones((height, width, 1), dtype=np.float32)
-    final_img = np.concatenate([sky_color, alpha], axis=-1)
+    final_img = np.concatenate([lin_color, alpha], axis=-1)
 
     return final_img.astype("f4").tobytes()

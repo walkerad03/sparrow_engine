@@ -72,7 +72,7 @@ class DeferredLightingPass(RenderPass):
     g_orm: ResourceId
     g_depth: ResourceId
 
-    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.SUN
+    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.SUN | PassFeatures.TIME
 
     _vao: moderngl.VertexArray | None = None
     _fs_vbo: moderngl.Buffer | None = None
@@ -114,7 +114,7 @@ class DeferredLightingPass(RenderPass):
             shader_id=ShaderId("deferred_lighting"),
             stages=ShaderStages(
                 vertex="sparrow/graphics/shaders/default/deferred_lighting.vert",
-                fragment="sparrow/graphics/shaders/default/deferred_lighting_pbr.frag",
+                fragment="sparrow/graphics/shaders/default/deferred_lighting.frag",
             ),
             label="DeferredLighting",
         )
@@ -177,7 +177,7 @@ class DeferredLightingPass(RenderPass):
         gl.viewport = (0, 0, out_fbo.size[0], out_fbo.size[1])
 
         # State: lighting pass is screen-space
-        gl.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
+        gl.disable(moderngl.CULL_FACE | moderngl.BLEND)
         gl.clear(0.0, 0.0, 0.0, 1.0)
 
         # Resolve inputs

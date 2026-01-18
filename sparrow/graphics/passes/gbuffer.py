@@ -45,7 +45,7 @@ class GBufferPass(RenderPass):
     g_orm: ResourceId
     g_depth: ResourceId
 
-    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.RESOLUTION
+    features: PassFeatures = PassFeatures.CAMERA
 
     _u_model: moderngl.Uniform | None = None
     _u_base_color: moderngl.Uniform | None = None
