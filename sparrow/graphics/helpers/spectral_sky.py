@@ -141,6 +141,11 @@ def generate_spectral_sky_lut(
     # Accumulator for 4 wavelengths
     total_l = np.zeros((*t1.shape, 4), dtype=np.float32)
 
+    # Accumulators for view ray depth
+    view_depth_r = np.zeros_like(t1)
+    view_depth_m = np.zeros_like(t1)
+    view_depth_o = np.zeros_like(t1)
+
     # 4. Raymarching Loop
     for i in range(num_samples):
         sample_dist = step_size * (i + 0.5)
@@ -175,9 +180,22 @@ def generate_spectral_sky_lut(
             / ((2.0 + g**2) * (1.0 + g**2 - 2.0 * g * mu) ** 1.5)
         )
 
+        view_depth_r += hr * step_size
+        view_depth_m += hm * step_size
+        view_depth_o += ho * step_size
+
+        tau_view = (
+            beta_r * view_depth_r[..., None]
+            + beta_m * view_depth_m[..., None]
+            + beta_o * view_depth_o[..., None]
+        )
+
+        attenuation_view = np.exp(-tau_view)
+
         # Scattering equation
         total_l += (
             attenuation
+            * attenuation_view
             * hr[..., np.newaxis]
             * beta_r
             * phase_r[..., np.newaxis]
@@ -185,6 +203,7 @@ def generate_spectral_sky_lut(
         )
         total_l += (
             attenuation
+            * attenuation_view
             * hm[..., np.newaxis]
             * beta_m
             * phase_m[..., np.newaxis]
@@ -194,28 +213,6 @@ def generate_spectral_sky_lut(
     # 5. Conversion and Tonemapping
     xyz = np.dot(total_l, SPEC_TO_XYZ.T)
     lin_rgb = xyz_to_srgb(xyz)
-
-    cos_angle = np.sum(view_dirs * sun_dir, axis=-1)
-
-    sun_radius = np.radians(sun_size * 0.5)
-    softness = np.radians(sun_softness_deg)
-
-    inner = sun_radius - softness
-    outer = sun_radius + softness
-
-    cos_inner = np.cos(inner)
-    cos_outer = np.cos(outer)
-
-    sun_weight = np.clip((cos_angle - cos_outer) / (cos_inner - cos_outer), 0.0, 1.0)
-
-    elev_rad = np.radians(sun_elevation)
-    air_mass = 1.0 / np.clip(np.sin(elev_rad), 0.05, 1.0)
-
-    extinction = np.exp(-0.15 * air_mass)
-
-    sun_L = sun_intensity * sun_radiance * extinction
-
-    lin_rgb += sun_weight[..., None] * sun_L
 
     # Ground Mask
     lin_rgb[view_dirs[..., 1] < -0.01] = 0.0

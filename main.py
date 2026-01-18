@@ -224,13 +224,15 @@ def main() -> None:
         direction=sun_dir,
     )
 
-    settings = RaytracingRendererSettings(
-        resolution, sunlight, max_bounces=4, samples_per_pixel=2
-    )
-
-    settings = DeferredRendererSettings(resolution, sunlight)
-
     state = AppState(mode="deferred")
+
+    if state.mode == "raytrace":
+        settings = RaytracingRendererSettings(
+            resolution, sunlight, max_bounces=4, samples_per_pixel=2
+        )
+    elif state.mode == "deferred":
+        settings = DeferredRendererSettings(resolution, sunlight)
+
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:

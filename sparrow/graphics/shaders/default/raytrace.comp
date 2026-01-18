@@ -199,10 +199,14 @@ float G_SchlickGGX(float NoV, float k) {
     return NoV / (NoV * (1.0 - k) + k);
 }
 
-float G_Smith(float NoV, float NoL, float alpha) {
-    // UE4-style k from alpha
-    float k = (alpha + 1.0);
-    k = (k * k) / 8.0;
+float G_Smith(float NoV, float NoL, float alpha, bool is_analytic_light) {
+    float k;
+    if (is_analytic_light) {
+        k = (alpha + 1.0);
+        k = (k * k) / 8.0;
+    } else {
+        k = (alpha * alpha) / 2.0;
+    }
     return G_SchlickGGX(NoV, k) * G_SchlickGGX(NoL, k);
 }
 
@@ -220,7 +224,8 @@ vec3 eval_bsdf(
     float metallic,
     float roughness,
     out float pdf_spec,  // pdf if sampled from spec lobe
-    out float pdf_diff   // pdf if sampled from diffuse lobe
+    out float pdf_diff,   // pdf if sampled from diffuse lobe
+    bool is_analytic_light
 ) {
     float NoV = max(dot(n, v), 0.0);
     float NoL = max(dot(n, l), 0.0);
@@ -244,7 +249,7 @@ vec3 eval_bsdf(
 
     // Specular
     float D = D_GGX(NoH, alpha);
-    float G = G_Smith(NoV, NoL, alpha);
+    float G = G_Smith(NoV, NoL, alpha, is_analytic_light);
     vec3  F = F_Schlick(F0, VoH);
 
     vec3 spec = (D * G) * F / max(4.0 * NoV * NoL, 1e-6);
@@ -328,14 +333,14 @@ bool sample_bsdf(
         if (dot(n, wi) <= 1e-6) return false;
 
         // Evaluate BSDF & PDFs for the sampled direction
-        f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+        f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff, false);
         pdf = w_spec * pdf_spec + w_diff * pdf_diff;
         return pdf > 0.0 && any(greaterThan(f, vec3(0.0)));
     } else {
         // Diffuse lobe
         wi = sample_cosine_hemisphere(n, seed, pdf_diff);
 
-        f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+        f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff, false);
         pdf = w_spec * pdf_spec + w_diff * pdf_diff;
         return pdf > 0.0 && any(greaterThan(f, vec3(0.0)));
     }
@@ -376,6 +381,8 @@ void main() {
         vec3 T = vec3(1.0); // path throughput
         vec3 L = vec3(0.0); // radiance
 
+        float prev_bounce_pdf = 0.0;
+
         for (int bounce = 0; bounce < u_max_bounces; bounce++) {
             // Find closest hit
             float closest_t = 1e30;
@@ -399,7 +406,16 @@ void main() {
             if (!hit) {
                 // Environment emission on miss
                 if (!is_sun_dir(ray.dir)) {
-                    L += T * sample_environment(ray.dir);
+                    vec3 env = sample_environment(ray.dir);
+
+                    float mis_weight = 1.0;
+
+                    if (bounce > 0) {
+                        float pdf_nee = 1.0 / (4.0 * PI);
+                        mis_weight = power_heuristic(prev_bounce_pdf, pdf_nee);
+                    }
+
+                    L += T * env * mis_weight;
                 }
                 break;
             }
@@ -445,7 +461,7 @@ void main() {
 
                 // BSDF eval
                 float pdf_spec, pdf_diff;
-                vec3 f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+                vec3 f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff, true);
 
                 // Contribution: T * f * Li * cos
                 L += T * f * Li * NoL;
@@ -465,7 +481,7 @@ void main() {
 
                         if (!is_sun_dir(wi)) {
                             float pdf_spec, pdf_diff;
-                            vec3 f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+                            vec3 f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff, true);
 
                             // Mixture BSDF pdf for MIS
                             // (match the sampling heuristic used in sample_bsdf)
@@ -494,7 +510,7 @@ void main() {
                     vec3 f = eval_bsdf(
                         n, v, sunDir,
                         baseColor, metallic, roughness,
-                        pdf_spec, pdf_diff
+                        pdf_spec, pdf_diff, true
                     );
 
                     L += T * f * Li * cosSun;
@@ -507,6 +523,7 @@ void main() {
             vec3 wi;
             vec3 f;
             float pdf;
+            
             if (!sample_bsdf(n, v, baseColor, metallic, roughness, seed, wi, f, pdf)) {
                 break;
             }
@@ -527,6 +544,8 @@ void main() {
             // Continue ray
             ray.origin = x_eps;
             ray.dir = wi;
+
+            prev_bounce_pdf = pdf;
         }
 
         L_accum += L;
