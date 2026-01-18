@@ -38,7 +38,6 @@ class Transform:
     """
 
     pos: Vector3 = Vector3(0.0, 0.0, 0.0)
-    # rot: float = 0.0  # Radians
     rot: Quaternion = Quaternion.identity()
     scale: Vector3 = Vector3(1.0, 1.0, 1.0)
 
@@ -126,7 +125,7 @@ class ChildOf:
     offset: Vector2 = Vector2(0.0, 0.0)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Camera:
     fov: float
     width: int
