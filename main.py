@@ -39,6 +39,7 @@ from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.renderer import Renderer
 from sparrow.graphics.renderer.settings import (
+    DeferredRendererSettings,
     PresentScaleMode,
     RaytracingRendererSettings,
     ResolutionSettings,
@@ -223,9 +224,13 @@ def main() -> None:
         direction=sun_dir,
     )
 
-    settings = RaytracingRendererSettings(resolution, sunlight)
+    settings = RaytracingRendererSettings(
+        resolution, sunlight, max_bounces=4, samples_per_pixel=2
+    )
 
-    state = AppState(mode="raytrace")
+    settings = DeferredRendererSettings(resolution, sunlight)
+
+    state = AppState(mode="deferred")
     renderer = Renderer(ctx, settings)
 
     def sync_pipeline(builder: RenderGraphBuilder) -> None:
@@ -235,6 +240,15 @@ def main() -> None:
         pipeline_func(builder, settings)
 
     renderer.initialize(sync_pipeline)
+
+    renderer.material_manager.create(
+        MaterialId("copper"),
+        Material(
+            base_color_factor=(0.932, 0.623, 0.522, 1.0),
+            metalness=1.0,
+            roughness=0.0,
+        ),
+    )
 
     renderer.material_manager.create(
         MaterialId("blackboard"),
@@ -249,15 +263,15 @@ def main() -> None:
         MaterialId("bone"),
         Material(
             base_color_factor=(0.793, 0.793, 0.664, 1.0),
-            metalness=0.0,
+            metalness=1.0,
             roughness=0.9,
         ),
     )
 
     draws: List[DrawItem] = [
         DrawItem(
-            MeshId("engine.cube"),
-            MaterialId("bone"),
+            MeshId("engine.stanford_dragon_lowpoly"),
+            MaterialId("copper"),
             np.eye(4, dtype=np.float32),
             1,
         ),
@@ -272,7 +286,7 @@ def main() -> None:
     point_lights = []
 
     cam = make_simple_camera(
-        eye=np.array([2.0, 0.75, -4.0], dtype=np.float32),
+        eye=np.array([1.0, 1.0, -2.0], dtype=np.float32),
         target=np.array([0.0, 0.0, 0.0], dtype=np.float32),
         fov=60.0,
         w=window_width,

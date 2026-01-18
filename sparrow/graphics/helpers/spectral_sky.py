@@ -97,6 +97,8 @@ def generate_spectral_sky_lut(
     sun_rotation: float = 179.0,
     sun_size: float = 0.545,
     sun_intensity: float = 1.0,
+    sun_radiance: float = 1.0e4,
+    sun_softness_deg: float = 0.1,
     altitude: float = 148.0,
     air_density: float = 1.0,
     aerosol_density: float = 1.1,
@@ -193,10 +195,27 @@ def generate_spectral_sky_lut(
     xyz = np.dot(total_l, SPEC_TO_XYZ.T)
     lin_rgb = xyz_to_srgb(xyz)
 
-    # Sun Disc
-    cos_sun_size = np.cos(np.radians(sun_size / 2.0))
-    sun_mask = np.sum(view_dirs * sun_dir, axis=-1) > cos_sun_size
-    lin_rgb[sun_mask] += sun_intensity * 10.0
+    cos_angle = np.sum(view_dirs * sun_dir, axis=-1)
+
+    sun_radius = np.radians(sun_size * 0.5)
+    softness = np.radians(sun_softness_deg)
+
+    inner = sun_radius - softness
+    outer = sun_radius + softness
+
+    cos_inner = np.cos(inner)
+    cos_outer = np.cos(outer)
+
+    sun_weight = np.clip((cos_angle - cos_outer) / (cos_inner - cos_outer), 0.0, 1.0)
+
+    elev_rad = np.radians(sun_elevation)
+    air_mass = 1.0 / np.clip(np.sin(elev_rad), 0.05, 1.0)
+
+    extinction = np.exp(-0.15 * air_mass)
+
+    sun_L = sun_intensity * sun_radiance * extinction
+
+    lin_rgb += sun_weight[..., None] * sun_L
 
     # Ground Mask
     lin_rgb[view_dirs[..., 1] < -0.01] = 0.0

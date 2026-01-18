@@ -1,13 +1,25 @@
 #version 460 core
 
+// -----------------------------------------------------------------------------
+// Physically Based Path Tracer (RGB) — GGX + Lambert, NEE, MIS, Russian Roulette
+//
+// Notes:
+// - This shader outputs *HDR radiance* into img_output (rgba16f).
+// - For physically correct results, apply exposure/tonemap in a *separate* pass.
+//   (If you tonemap here and then accumulate temporally, you bias the estimator.)
+// - Environment direct lighting uses uniform-sphere sampling (unbiased, noisy).
+//   Upgrade path: build an alias table / CDF for env importance sampling.
+// -----------------------------------------------------------------------------
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-layout(rgba16f, binding = 0) uniform image2D img_output; // Use rgba16f to match the "f2" dtype in TextureDesc
+layout(rgba16f, binding = 0) uniform image2D img_output;
 
 uniform mat4 u_inv_view_proj;
 uniform vec3 u_camera_pos;
-uniform int u_max_bounces;
-uniform int u_samples_per_pixel;
-uniform int u_frame_index;
+
+uniform int  u_max_bounces;
+uniform int  u_samples_per_pixel;
+uniform int  u_frame_index;
 uniform bool u_denoiser_enabled;
 
 struct Ray {
@@ -15,80 +27,77 @@ struct Ray {
     vec3 dir;
 };
 
-
 struct Triangle {
-    vec4 v0; // xyz: pos, w: metalness
-    vec4 v1; // xyz: pos, w: roughness
-    vec4 v2; // xyz: pos, w: padding/unused
-    vec4 albedo; // rgb: color, w: unused
+    vec4 v0;     // xyz: pos, w: metalness
+    vec4 v1;     // xyz: pos, w: roughness
+    vec4 v2;     // xyz: pos, w: unused
+    vec4 albedo; // rgb: baseColor, w: unused
 };
+
 layout(std430, binding = 1) readonly buffer TriangleBuffer {
     Triangle triangles[];
 };
 uniform int u_triangle_count;
 
-
 struct PointLight {
-    vec4 position;
-    vec4 color;
+    vec4 position; // xyz position, w unused
+    vec4 color;    // rgb color, w intensity
 };
 layout(std430, binding = 2) readonly buffer LightBuffer {
     PointLight lights[];
 };
-uniform int u_light_count; // Max of 8
+uniform int u_light_count;
 
+layout(binding = 5) uniform sampler2D u_sky_lut;
+uniform vec3 u_sun_direction;
+uniform vec3 u_sun_radiance;
 
-layout(binding=5) uniform sampler2D u_sky_lut;
+#define PI 3.14159265358979323846
 
-#define PI 3.14159265359
-
-
+// -----------------------------------------------------------------------------
+// RNG (PCG-ish)
+// -----------------------------------------------------------------------------
 uint pcg_hash(uint v) {
     uint state = v * 747796405u + 2891336453u;
-    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    uint word  = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
 
-float rand(inout uint seed) {
+float rand01(inout uint seed) {
     seed = pcg_hash(seed);
     return float(seed) * (1.0 / 4294967296.0);
 }
 
-// Return a random direction in a hemisphere oriented around normal N
-vec3 random_cosine_weighted_hemisphere(vec3 N, inout uint seed) {
-    float r1 = rand(seed);
-    float r2 = rand(seed);
-    float phi = 2.0 * 3.14159265 * r1;
-    float x = cos(phi) * sqrt(r2);
-    float y = sin(phi) * sqrt(r2);
-    float z = sqrt(1.0 - r2);
-    
-    // Build Orthonormal Basis
-    vec3 helper = abs(N.x) > 0.99 ? vec3(0, 1, 0) : vec3(1, 0, 0);
-    vec3 tangent = normalize(cross(helper, N));
-    vec3 bitangent = cross(N, tangent);
-    
-    return tangent * x + bitangent * y + N * z;
+// -----------------------------------------------------------------------------
+// Math helpers
+// -----------------------------------------------------------------------------
+float saturate(float x) { return clamp(x, 0.0, 1.0); }
+
+float luminance(vec3 c) {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
-vec2 dir_to_uv(vec3 dir) {
-    // atan(z, x) gives longitude (-PI to PI)
-    // asin(y) gives latitude (-PI/2 to PI/2)
-    float y = clamp(dir.y, -1.0, 1.0);
-    float u = 0.5 + atan(dir.x, dir.z) / (2.0 * PI);
-    float v = 0.5 + asin(y) / PI;
-    return vec2(u, v);
+vec3 safe_normalize(vec3 v) {
+    float l2 = dot(v, v);
+    if (l2 <= 1e-20) return vec3(0, 1, 0);
+    return v * inversesqrt(l2);
 }
 
+// Build an orthonormal basis from N
+void make_onb(vec3 n, out vec3 t, out vec3 b) {
+    vec3 helper = (abs(n.y) < 0.999) ? vec3(0, 1, 0) : vec3(1, 0, 0);
+    t = normalize(cross(helper, n));
+    b = cross(n, t);
+}
+
+// -----------------------------------------------------------------------------
+// Environment sampling (equirect)
+// -----------------------------------------------------------------------------
 vec2 dir_to_equirect(vec3 d) {
-    d = normalize(d);
-    float phi = atan(d.x, d.z); // [-pi, pi]
-    float theta = asin(clamp(d.y, -1.0, 1.0)); // [-pi/2, pi/2]
-
-    return vec2(
-        phi / (2.0 * PI) + 0.5,
-        theta / PI + 0.5
-    );
+    d = safe_normalize(d);
+    float phi   = atan(d.x, d.z);                 // [-pi, pi]
+    float theta = asin(clamp(d.y, -1.0, 1.0));    // [-pi/2, pi/2]
+    return vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
 }
 
 vec3 sample_environment(vec3 dir) {
@@ -96,158 +105,445 @@ vec3 sample_environment(vec3 dir) {
     return texture(u_sky_lut, uv).rgb;
 }
 
+// Uniform-sphere direction + pdf = 1/(4pi)
+vec3 sample_uniform_sphere(inout uint seed, out float pdf) {
+    float u1 = rand01(seed);
+    float u2 = rand01(seed);
+    float z  = 1.0 - 2.0 * u1;
+    float r  = sqrt(max(0.0, 1.0 - z * z));
+    float phi = 2.0 * PI * u2;
+    vec3 d = vec3(r * cos(phi), z, r * sin(phi));
+    pdf = 1.0 / (4.0 * PI);
+    return d;
+}
+
+// Cosine-weighted hemisphere (for diffuse sampling)
+vec3 sample_cosine_hemisphere(vec3 n, inout uint seed, out float pdf) {
+    float r1 = rand01(seed);
+    float r2 = rand01(seed);
+
+    float phi = 2.0 * PI * r1;
+    float x = cos(phi) * sqrt(r2);
+    float y = sin(phi) * sqrt(r2);
+    float z = sqrt(max(0.0, 1.0 - r2));
+
+    vec3 t, b;
+    make_onb(n, t, b);
+
+    vec3 d = t * x + b * y + n * z;
+    d = safe_normalize(d);
+
+    float cosTheta = max(dot(n, d), 0.0);
+    pdf = cosTheta / PI;
+    return d;
+}
+
+// -----------------------------------------------------------------------------
+// Intersection
+// -----------------------------------------------------------------------------
 bool hit_triangle(Ray r, Triangle tri, out float t, out vec3 normal) {
     vec3 v0 = tri.v0.xyz;
     vec3 v1 = tri.v1.xyz;
     vec3 v2 = tri.v2.xyz;
 
-    vec3 edge1 = v1 - v0;
-    vec3 edge2 = v2 - v0;
-    vec3 h = cross(r.dir, edge2);
-    float a = dot(edge1, h);
+    vec3 e1 = v1 - v0;
+    vec3 e2 = v2 - v0;
+    vec3 h  = cross(r.dir, e2);
+    float a = dot(e1, h);
 
-    if (a > -0.00001 && a < 0.00001) return false; // Ray is parallel to triangle
+    if (abs(a) < 1e-7) return false;
 
     float f = 1.0 / a;
     vec3 s = r.origin - v0;
     float u = f * dot(s, h);
-
     if (u < 0.0 || u > 1.0) return false;
 
-    vec3 q = cross(s, edge1);
+    vec3 q = cross(s, e1);
     float v = f * dot(r.dir, q);
-
     if (v < 0.0 || u + v > 1.0) return false;
 
-    t = f * dot(edge2, q);
-    if (t > 0.00001) {
-        normal = normalize(cross(edge1, edge2));
-        return true;
+    t = f * dot(e2, q);
+    if (t <= 1e-4) return false;
+
+    normal = safe_normalize(cross(e1, e2));
+    return true;
+}
+
+// Shadow test (any hit closer than maxDist)
+bool occluded(vec3 origin, vec3 dir, float maxDist) {
+    Ray r;
+    r.origin = origin;
+    r.dir = dir;
+
+    for (int i = 0; i < u_triangle_count; i++) {
+        float t;
+        vec3 n;
+        if (hit_triangle(r, triangles[i], t, n)) {
+            if (t > 1e-4 && t < maxDist) return true;
+        }
     }
     return false;
 }
 
+// -----------------------------------------------------------------------------
+// Microfacet GGX BRDF (Cook-Torrance)
+// -----------------------------------------------------------------------------
+float D_GGX(float NoH, float alpha) {
+    float a2 = alpha * alpha;
+    float d = (NoH * NoH) * (a2 - 1.0) + 1.0;
+    return a2 / (PI * d * d);
+}
+
+// Smith masking-shadowing (Schlick-GGX approximation)
+float G_SchlickGGX(float NoV, float k) {
+    return NoV / (NoV * (1.0 - k) + k);
+}
+
+float G_Smith(float NoV, float NoL, float alpha) {
+    // UE4-style k from alpha
+    float k = (alpha + 1.0);
+    k = (k * k) / 8.0;
+    return G_SchlickGGX(NoV, k) * G_SchlickGGX(NoL, k);
+}
+
+vec3 F_Schlick(vec3 F0, float VoH) {
+    float f = pow(1.0 - VoH, 5.0);
+    return F0 + (1.0 - F0) * f;
+}
+
+// Evaluate BRDF f = fd + fs (both in radiance units)
+vec3 eval_bsdf(
+    vec3 n,
+    vec3 v,          // view dir (pointing away from surface), i.e. -ray.dir
+    vec3 l,          // light dir (pointing away from surface)
+    vec3 baseColor,
+    float metallic,
+    float roughness,
+    out float pdf_spec,  // pdf if sampled from spec lobe
+    out float pdf_diff   // pdf if sampled from diffuse lobe
+) {
+    float NoV = max(dot(n, v), 0.0);
+    float NoL = max(dot(n, l), 0.0);
+    if (NoV <= 0.0 || NoL <= 0.0) {
+        pdf_spec = 0.0;
+        pdf_diff = 0.0;
+        return vec3(0.0);
+    }
+
+    // Clamp roughness to avoid singularities
+    float r = clamp(roughness, 0.02, 1.0);
+    float alpha = r * r;
+
+    vec3 h = safe_normalize(v + l);
+
+    float NoH = max(dot(n, h), 0.0);
+    float VoH = max(dot(v, h), 0.0);
+
+    // Fresnel base reflectance
+    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+
+    // Specular
+    float D = D_GGX(NoH, alpha);
+    float G = G_Smith(NoV, NoL, alpha);
+    vec3  F = F_Schlick(F0, VoH);
+
+    vec3 spec = (D * G) * F / max(4.0 * NoV * NoL, 1e-6);
+
+    // Diffuse (Lambert, energy-reduced by (1-F) and metallic)
+    vec3 kd = (1.0 - metallic) * (vec3(1.0) - F);
+    vec3 diff = kd * baseColor * (1.0 / PI);
+
+    // PDFs for MIS / mixture:
+    // Diffuse pdf: cosine hemisphere
+    pdf_diff = NoL / PI;
+
+    // Specular pdf: derived from sampling half-vector h from GGX NDF
+    // pdf(l) = pdf(h) / (4 * dot(l, h))
+    // pdf(h) = D * NoH
+    float pdf_h = D * NoH;
+    pdf_spec = pdf_h / max(4.0 * VoH, 1e-6);
+
+    return diff + spec;
+}
+
+// Sample GGX half-vector (Trowbridge-Reitz) in tangent space, then transform
+vec3 sample_ggx_half_vector(vec3 n, float alpha, inout uint seed) {
+    float u1 = rand01(seed);
+    float u2 = rand01(seed);
+
+    // Sample GGX NDF
+    float a2 = alpha * alpha;
+    float phi = 2.0 * PI * u1;
+    float cosTheta = sqrt((1.0 - u2) / (1.0 + (a2 - 1.0) * u2));
+    float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+
+    vec3 h_tan = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+    vec3 t, b;
+    make_onb(n, t, b);
+    // Tangent space -> world
+    vec3 h = safe_normalize(t * h_tan.x + b * h_tan.y + n * h_tan.z);
+    return h;
+}
+
+bool is_sun_dir(vec3 d) {
+    // small angular threshold (sun radius ~0.27 degrees)
+    float cosTheta = dot(normalize(d), normalize(u_sun_direction));
+    return cosTheta > cos(radians(0.27));
+}
+
+
+// Sample the BSDF mixture (diffuse + specular) and return (wi, pdf, f)
+bool sample_bsdf(
+    vec3 n,
+    vec3 v,
+    vec3 baseColor,
+    float metallic,
+    float roughness,
+    inout uint seed,
+    out vec3 wi,
+    out vec3 f,
+    out float pdf
+) {
+    float r = clamp(roughness, 0.02, 1.0);
+    float alpha = r * r;
+
+    // Use Fresnel-ish energy to pick lobe (heuristic)
+    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+    // Approx expected spec weight from F0 luminance (cheap)
+    float w_spec = clamp(luminance(F0), 0.05, 0.95);
+    float w_diff = 1.0 - w_spec;
+
+    float xi = rand01(seed);
+
+    float pdf_spec, pdf_diff;
+
+    if (xi < w_spec) {
+        // Specular lobe: sample GGX half-vector, reflect v around h
+        vec3 h = sample_ggx_half_vector(n, alpha, seed);
+        wi = reflect(-v, h); // v points away from surface, so -v is incident
+        wi = safe_normalize(wi);
+
+        // Reject below the surface
+        if (dot(n, wi) <= 1e-6) return false;
+
+        // Evaluate BSDF & PDFs for the sampled direction
+        f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+        pdf = w_spec * pdf_spec + w_diff * pdf_diff;
+        return pdf > 0.0 && any(greaterThan(f, vec3(0.0)));
+    } else {
+        // Diffuse lobe
+        wi = sample_cosine_hemisphere(n, seed, pdf_diff);
+
+        f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+        pdf = w_spec * pdf_spec + w_diff * pdf_diff;
+        return pdf > 0.0 && any(greaterThan(f, vec3(0.0)));
+    }
+}
+
+float power_heuristic(float a, float b) {
+    float a2 = a * a;
+    float b2 = b * b;
+    return a2 / max(a2 + b2, 1e-8);
+}
+
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
 void main() {
-    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 dims = imageSize(img_output);
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dims  = imageSize(img_output);
+    if (pixel.x >= dims.x || pixel.y >= dims.y) return;
 
-    if (pixel_coords.x >= dims.x || pixel_coords.y >= dims.y) return;
+    // Stable per-pixel seed
+    uint seed = uint(pixel.y * uint(dims.x) + pixel.x) ^ pcg_hash(uint(u_frame_index));
 
-    uint seed = uint(pixel_coords.y * 1920 + pixel_coords.x) ^ pcg_hash(uint(u_frame_index));
-
-    vec3 pixel_color_accumulator = vec3(0.0);
+    vec3 L_accum = vec3(0.0);
 
     for (int s = 0; s < u_samples_per_pixel; s++) {
-        vec2 jitter = vec2(rand(seed), rand(seed)) - 0.5;
-        vec2 uv = (vec2(pixel_coords) + 0.5 + jitter) / vec2(dims);
-
-        // Ray gen
+        // Jittered primary ray
+        vec2 jitter = vec2(rand01(seed), rand01(seed)) - 0.5;
+        vec2 uv = (vec2(pixel) + 0.5 + jitter) / vec2(dims);
         vec2 ndc = uv * 2.0 - 1.0;
+
         vec4 target = u_inv_view_proj * vec4(ndc, -1.0, 1.0);
         vec3 world_target = target.xyz / target.w;
 
-        Ray current_ray;
-        current_ray.origin = u_camera_pos;
-        current_ray.dir = normalize(world_target - current_ray.origin);
+        Ray ray;
+        ray.origin = u_camera_pos;
+        ray.dir = safe_normalize(world_target - ray.origin);
 
-        vec3 throughput = vec3(1.0);
-        vec3 total_radiance = vec3(0.0);
+        vec3 T = vec3(1.0); // path throughput
+        vec3 L = vec3(0.0); // radiance
 
         for (int bounce = 0; bounce < u_max_bounces; bounce++) {
+            // Find closest hit
             float closest_t = 1e30;
             int hit_idx = -1;
-            vec3 hit_normal;
-            bool hit_found = false;
+            vec3 n_g = vec3(0.0);
+            bool hit = false;
 
             for (int i = 0; i < u_triangle_count; i++) {
-                float t; vec3 tri_normal;
-                if (hit_triangle(current_ray, triangles[i], t, tri_normal)) {
-                    if (t > 0.001 && t < closest_t) {
+                float t;
+                vec3 n;
+                if (hit_triangle(ray, triangles[i], t, n)) {
+                    if (t < closest_t) {
                         closest_t = t;
                         hit_idx = i;
-                        hit_normal = tri_normal;
-                        hit_found = true;
+                        n_g = n;
+                        hit = true;
                     }
                 }
             }
 
-            if (hit_found) {
-                Triangle tri = triangles[hit_idx];
-                vec3 hit_pos = current_ray.origin + closest_t * current_ray.dir;
-
-                vec3 material_color = tri.albedo.rgb;
-                float metalness = tri.v0.w;
-                float roughness = tri.v1.w;
-
-                vec3 lighting_contribution = vec3(0.0);
-
-                for (int l = 0; l < u_light_count; l++) {
-                    vec3 light_dir = lights[l].position.xyz - hit_pos;
-                    float light_dist = length(light_dir);
-                    light_dir = normalize(light_dir);
-
-                    // Shadow Ray
-                    Ray shadow_ray;
-                    shadow_ray.origin = hit_pos + hit_normal * 0.001;
-                    shadow_ray.dir = light_dir;
-                    bool in_shadow = false;
-
-                    for (int i = 0; i < u_triangle_count; i++) {
-                        float st; vec3 sn;
-                        if (hit_triangle(shadow_ray, triangles[i], st, sn)) {
-                            if (st < light_dist) {
-                                in_shadow = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!in_shadow) {
-                        float diff = max(dot(hit_normal, light_dir), 0.0);
-                        float attenuation = 1.0 / (light_dist * light_dist);
-                        lighting_contribution += material_color * lights[l].color.rgb * lights[l].color.w * diff * attenuation;
-                    }
+            if (!hit) {
+                // Environment emission on miss
+                if (!is_sun_dir(ray.dir)) {
+                    L += T * sample_environment(ray.dir);
                 }
-
-                vec3 env_radiance = sample_environment(hit_normal);
-                lighting_contribution += material_color * env_radiance * (1.0 / PI);
-
-                total_radiance += throughput * lighting_contribution;
-
-                current_ray.origin = hit_pos + hit_normal * 0.001;
-                vec3 reflect_dir = reflect(current_ray.dir, hit_normal);
-                vec3 diffuse_dir = random_cosine_weighted_hemisphere(hit_normal, seed);
-
-                reflect_dir = normalize(mix(reflect_dir, diffuse_dir, roughness * roughness));
-
-                if (rand(seed) < metalness) {
-                    current_ray.dir = reflect_dir;
-                } else {
-                    current_ray.dir = diffuse_dir;
-                }
-
-                throughput *= material_color;
-
-            } else {
-                total_radiance += throughput * sample_environment(current_ray.dir);
                 break;
             }
+
+            // Hit data
+            Triangle tri = triangles[hit_idx];
+            vec3 x = ray.origin + closest_t * ray.dir;
+
+            vec3 baseColor = tri.albedo.rgb;
+            float metallic  = saturate(tri.v0.w);
+            float roughness = saturate(tri.v1.w);
+
+            // Orient normal to oppose the incoming direction (geometric normal)
+            vec3 n = n_g;
+            if (dot(n, -ray.dir) < 0.0) n = -n;
+
+            vec3 v = safe_normalize(-ray.dir); // view/outgoing direction from surface
+
+            // Small offset to avoid self-intersection
+            vec3 x_eps = x + n * 1e-3;
+
+            // -----------------------------------------------------------------
+            // Next Event Estimation (Direct Lighting)
+            // -----------------------------------------------------------------
+
+            // 1) Point lights (delta) — no MIS needed against BSDF sampling in a strict sense
+            // (You can still MIS if you later add area lights; for delta lights treat separately.)
+            for (int l = 0; l < u_light_count; l++) {
+                vec3 lp = lights[l].position.xyz;
+                vec3 toL = lp - x;
+                float dist2 = dot(toL, toL);
+                float dist  = sqrt(dist2);
+                vec3 wi = toL / max(dist, 1e-6);
+
+                float NoL = max(dot(n, wi), 0.0);
+                if (NoL <= 0.0) continue;
+
+                // Shadow ray
+                if (occluded(x_eps, wi, dist - 1e-3)) continue;
+
+                // Radiance from point light (simple inverse-square)
+                vec3 Li = lights[l].color.rgb * lights[l].color.w / max(dist2, 1e-6);
+
+                // BSDF eval
+                float pdf_spec, pdf_diff;
+                vec3 f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+
+                // Contribution: T * f * Li * cos
+                L += T * f * Li * NoL;
+            }
+
+            // 2) Environment direct light (unbiased, noisy):
+            // Sample a direction on the sphere, check visibility, MIS weight vs BSDF pdf.
+            {
+                float pdf_light;
+                vec3 wi = sample_uniform_sphere(seed, pdf_light);
+
+                float NoL = max(dot(n, wi), 0.0);
+                if (NoL > 0.0) {
+                    // Shadow ray to "infinity": use a large maxDist
+                    if (!occluded(x_eps, wi, 1e30)) {
+                        vec3 Li = sample_environment(wi);
+
+                        if (!is_sun_dir(wi)) {
+                            float pdf_spec, pdf_diff;
+                            vec3 f = eval_bsdf(n, v, wi, baseColor, metallic, roughness, pdf_spec, pdf_diff);
+
+                            // Mixture BSDF pdf for MIS
+                            // (match the sampling heuristic used in sample_bsdf)
+                            vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+                            float w_spec = clamp(luminance(F0), 0.05, 0.95);
+                            float w_diff = 1.0 - w_spec;
+
+                            float pdf_bsdf = w_spec * pdf_spec + w_diff * pdf_diff;
+
+                            float w = power_heuristic(pdf_light, pdf_bsdf);
+                            L += T * f * Li * NoL * (w / max(pdf_light, 1e-8));
+                        }
+                    }
+                }
+            }
+
+            // Sun direct lighting
+            vec3 sunDir = normalize(u_sun_direction);
+            float cosSun = max(dot(n, sunDir), 0.0);
+
+            if (cosSun > 0.0) {
+                if (!occluded(x_eps, sunDir, 1e30)) {
+                    vec3 Li = u_sun_radiance;
+
+                    float pdf_spec, pdf_diff;
+                    vec3 f = eval_bsdf(
+                        n, v, sunDir,
+                        baseColor, metallic, roughness,
+                        pdf_spec, pdf_diff
+                    );
+
+                    L += T * f * Li * cosSun;
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // Sample BSDF to continue the path (Indirect)
+            // -----------------------------------------------------------------
+            vec3 wi;
+            vec3 f;
+            float pdf;
+            if (!sample_bsdf(n, v, baseColor, metallic, roughness, seed, wi, f, pdf)) {
+                break;
+            }
+
+            float NoL = max(dot(n, wi), 0.0);
+            if (NoL <= 0.0) break;
+
+            // Throughput update: T *= f * cos / pdf
+            T *= f * (NoL / max(pdf, 1e-8));
+
+            // Russian roulette (unbiased) after a couple bounces
+            if (bounce >= 3) {
+                float p_survive = clamp(luminance(T), 0.05, 0.95);
+                if (rand01(seed) > p_survive) break;
+                T /= p_survive;
+            }
+
+            // Continue ray
+            ray.origin = x_eps;
+            ray.dir = wi;
         }
 
-        pixel_color_accumulator += total_radiance;
+        L_accum += L;
     }
 
-    vec3 average_radiance = pixel_color_accumulator / float(u_samples_per_pixel);
+    vec3 L_avg = L_accum / float(max(u_samples_per_pixel, 1));
 
-    float exposure = 32.0;
-    vec3 mapped = vec3(1.0) - exp(-average_radiance * exposure);
-   
+    // -------------------------------------------------------------------------
+    // Output: store HDR radiance in img_output, with optional temporal accumulation
+    // -------------------------------------------------------------------------
     if (u_denoiser_enabled) {
-        vec3 old_color = imageLoad(img_output, pixel_coords).rgb;
-        float weight = 1.0 / float(u_frame_index + 1);
-        vec3 final_accumulated = mix(old_color, mapped, weight);
-        imageStore(img_output, pixel_coords, vec4(final_accumulated, 1.0));
+        // Running average in HDR (unbiased if L_avg is unbiased)
+        vec3 old = imageLoad(img_output, pixel).rgb;
+        float w = 1.0 / float(u_frame_index + 1);
+        vec3 accum = mix(old, L_avg, w);
+        imageStore(img_output, pixel, vec4(accum, 1.0));
     } else {
-        imageStore(img_output, pixel_coords, vec4(mapped, 1.0));
+        imageStore(img_output, pixel, vec4(L_avg, 1.0));
     }
 }

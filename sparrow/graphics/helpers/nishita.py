@@ -201,7 +201,7 @@ def generate_nishita_sky_lut(
     ms_factor = 0.5 * (1.0 - np.exp(-optical_depth_r))
     lin_color += lin_color * ms_factor[..., np.newaxis]
 
-    lin_color *= 20.0
+    lin_color *= 1.0
 
     mask = view_dirs[..., 1] < -0.02
     lin_color[mask] = 0.0

@@ -4,6 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Flag, auto
+from math import floor, log2
 from typing import (
     Any,
     Literal,
@@ -201,7 +202,13 @@ class RenderPass(ABC):
                     self._uniforms[name] = self._program[name]
 
         if PassFeatures.SUN in self.features:
-            for name in ["u_sun_direction", "u_sun_color", "u_sky_lut"]:
+            for name in [
+                "u_sun_direction",
+                "u_sun_color",
+                "u_sky_lut",
+                "u_sky_max_mip",
+                "u_sun_radiance",
+            ]:
                 if name in self._program:
                     self._uniforms[name] = self._program[name]
 
@@ -249,6 +256,18 @@ class RenderPass(ABC):
                 sky_handle = services.texture_manager.get(tex_id)
                 sky_handle.texture.use(location=self._sky_lut_binding)
                 self._uniforms["u_sky_lut"].value = self._sky_lut_binding
+
+            if "u_sky_max_mip" in self._uniforms:
+                h, w = (
+                    self.settings.resolution.logical_height,
+                    self.settings.resolution.logical_width,
+                )
+
+                max_mips = floor(log2(max(h, w)))
+                self._uniforms["u_sky_max_mip"].value = float(max_mips)
+
+            if "u_sun_radiance" in self._uniforms:
+                self._uniforms["u_sun_radiance"].value = (10.0, 10.0, 10.0)
 
         if (
             PassFeatures.RESOLUTION in self.features

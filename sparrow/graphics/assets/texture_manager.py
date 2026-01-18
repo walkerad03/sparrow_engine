@@ -6,6 +6,7 @@ from typing import Dict
 
 import moderngl
 
+from sparrow.graphics.helpers.nishita import generate_nishita_sky_lut
 from sparrow.graphics.helpers.spectral_sky import generate_spectral_sky_lut
 from sparrow.graphics.util.ids import TextureId
 
@@ -31,7 +32,15 @@ class TextureManager:
         sky_data = generate_spectral_sky_lut(
             width=512,
             height=256,
+            altitude=1000,
+            sun_intensity=50.0,
+            sun_elevation=45.0,
+            sun_rotation=0.0,
             # sun_dir=(0.0, 1.0, 0.0),  # Default: Noon
+        )
+
+        sky_data = generate_nishita_sky_lut(
+            width=512, height=256, sun_dir=(0.0, 1.0, 0.0)
         )
 
         self.create_from_bytes(
@@ -60,14 +69,12 @@ class TextureManager:
 
         texture = self._gl.texture((width, height), components, data=data, dtype=dtype)
 
-        if dtype == "f4":
-            texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
-            texture.repeat_x = False
-            texture.repeat_y = False
-        else:
-            texture.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
-            if components == 4:
-                texture.build_mipmaps()
+        texture.repeat_x = False
+        texture.repeat_y = False
+
+        texture.build_mipmaps()
+
+        texture.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
 
         handle = TextureHandle(texture=texture, label=label or str(tex_id))
         self._textures[tex_id] = handle
