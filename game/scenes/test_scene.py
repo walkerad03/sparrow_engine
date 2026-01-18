@@ -8,12 +8,14 @@ from sparrow.core.scene import Scene
 from sparrow.graphics.assets.material_manager import Material
 from sparrow.graphics.util.ids import MaterialId, MeshId
 from sparrow.input.handler import InputHandler
+from sparrow.resources.rendering import RenderViewport, RendererResource
 from sparrow.types import Vector3
 
 
 class TestScene(Scene):
     def on_start(self):
-        self.app.renderer.material_manager.create(
+        renderer = self.world.get_resource(RendererResource).renderer
+        renderer.material_manager.create(
             MaterialId("copper"),
             Material(
                 base_color_factor=(0.932, 0.623, 0.522, 1.0),
@@ -22,7 +24,7 @@ class TestScene(Scene):
             ),
         )
 
-        self.app.renderer.material_manager.create(
+        renderer.material_manager.create(
             MaterialId("bone"),
             Material(
                 base_color_factor=(0.793, 0.793, 0.664, 1.0),
@@ -31,7 +33,8 @@ class TestScene(Scene):
             ),
         )
 
-        w, h = self.app.screen_size
+        viewport = self.world.get_resource(RenderViewport)
+        w, h = viewport.width, viewport.height
 
         x_pos = math.sin(self.frame_index + 35 / 100.0) * 4.0
         y_pos = 1.25
@@ -52,8 +55,16 @@ class TestScene(Scene):
 
         self.world.create_entity(
             Mesh(
-                mesh_id=MeshId("engine.stanford_dragon_lowpoly"),
+                mesh_id=MeshId("engine.cube"),
                 material_id=MaterialId("copper"),
+            ),
+            Transform(pos=Vector3(0.0, 1.0, 0.0), scale=Vector3(1.0, 1.0, 1.0)),
+        )
+
+        self.world.create_entity(
+            Mesh(
+                mesh_id=MeshId("engine.large_plane"),
+                material_id=MaterialId("bone"),
             ),
             Transform(pos=Vector3(0.0, 0.0, 0.0), scale=Vector3(2.5, 2.5, 2.5)),
         )

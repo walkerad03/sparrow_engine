@@ -51,7 +51,7 @@ class MeshManager:
             load_obj("sparrow/graphics/meshes/default/dense_icosphere.obj"),
             label="Dense Icosphere",
         )
-
+        """
         self.create(
             MeshId("engine.stanford_dragon"),
             load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon.obj"),
@@ -63,7 +63,7 @@ class MeshManager:
             load_obj("sparrow/graphics/meshes/default/stanford-bunny.obj"),
             label="Stanford Bunny",
         )
-        """
+
         self.create(
             MeshId("engine.large_plane"),
             load_obj("sparrow/graphics/meshes/default/large_plane.obj"),

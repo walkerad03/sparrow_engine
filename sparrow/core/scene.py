@@ -7,16 +7,31 @@ import pygame
 from sparrow.core.components import Mesh, Transform
 from sparrow.core.world import World
 from sparrow.graphics.ecs.frame_submit import DrawItem, RenderFrameInput
+from sparrow.graphics.renderer.settings import (
+    PresentScaleMode,
+    RaytracingRendererSettings,
+    ResolutionSettings,
+    SunlightSettings,
+)
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
 from sparrow.resources.cameras import CameraOutput
+from sparrow.resources.rendering import (
+    RenderContext,
+    RendererSettingsResource,
+    RenderFrame,
+    RenderViewport,
+)
 from sparrow.systems.camera import camera_system
+from sparrow.systems.rendering import ensure_renderer_resource, render_system
 
 if TYPE_CHECKING:
     from sparrow.core.application import Application
 
 
 class Scene:
+    render_enabled: bool = True
+
     def __init__(self, app: Application):
         self.world = World()
 
@@ -52,16 +67,65 @@ class Scene:
         # TODO: Poll input, window events, resize handling.
         # If resized, update renderer settings and rebuild graph or trigger resize path.
 
+    def on_render(self) -> None:
+        """Called every frame to submit render data (if rendering is enabled)."""
+        if not self.render_enabled:
+            return
+
+        frame = self.get_render_frame()
+        frame_res = RenderFrame(frame)
+
+        if self.world.try_resource(RenderFrame) is None:
+            self.world.add_resource(frame_res)
+        else:
+            self.world.mutate_resource(frame_res)
+
+        render_system(self.world)
+
     def on_exit(self) -> None:
         """Called when transitioning away from this scene."""
         pass
+
+    def configure_rendering(self) -> None:
+        if not self.render_enabled:
+            return
+
+        if self.world.try_resource(RenderContext) is None:
+            raise RuntimeError("RenderContext resource missing for renderer setup.")
+
+        if self.world.try_resource(RendererSettingsResource) is None:
+            viewport = self.world.try_resource(RenderViewport)
+            if viewport is None:
+                raise RuntimeError(
+                    "RenderViewport resource missing for renderer setup."
+                )
+
+            resolution = ResolutionSettings(
+                logical_width=int(viewport.width / 1),
+                logical_height=int(viewport.height / 1),
+                scale_mode=PresentScaleMode.INTEGER_FIT,
+            )
+
+            settings = RaytracingRendererSettings(
+                resolution,
+                SunlightSettings(),
+                samples_per_pixel=16,
+                denoiser_enabled=False,
+            )
+            self.world.add_resource(RendererSettingsResource(settings))
+
+        ensure_renderer_resource(self.world)
 
     def get_render_frame(self) -> RenderFrameInput:
         """
         Extracts data from the ECS World to build the FrameContext for the Renderer.
         You can override this if you need custom render logic.
         """
-        w, h = self.app.screen_size
+        viewport = self.world.try_resource(RenderViewport)
+        if viewport is None:
+            raise RuntimeError("RenderViewport resource missing for render frame.")
+
+        w, h = viewport.width, viewport.height
 
         cam_out = self.world.try_resource(CameraOutput)
         if cam_out is None or cam_out.active is None:

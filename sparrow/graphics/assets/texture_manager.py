@@ -31,7 +31,7 @@ class TextureManager:
         sky_data = generate_spectral_sky_lut(
             width=512,
             height=256,
-            altitude=1000,
+            altitude=150,
             sun_intensity=50.0,
             sun_elevation=15.0,
             sun_rotation=0.0,
