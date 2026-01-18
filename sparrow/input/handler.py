@@ -11,6 +11,21 @@ class InputHandler:
         self._context_stack: List[InputContext] = []
         self._active_actions: Set[InputAction] = set()
 
+        self._mouse_delta = [0.0, 0.0]
+        self.mouse_sensitivity = 0.1
+        self.mouse_visible = True
+
+    def set_mouse_lock(self, locked: bool):
+        """Helper to lock/hide the mouse for FPS controls."""
+        self.mouse_visible = not locked
+        pygame.mouse.set_visible(self.mouse_visible)
+        pygame.event.set_grab(locked)
+        if locked:
+            # Center the mouse so we don't get a huge delta on first frame
+            surf = pygame.display.get_surface()
+            if surf:
+                pygame.mouse.set_pos(surf.get_rect().center)
+
     def push_context(self, context: InputContext):
         """Add a context to the top of the stack (highest priority)."""
         self._context_stack.append(context)
@@ -34,6 +49,25 @@ class InputHandler:
             action = self._resolve_key(event.key)
             if action and action in self._active_actions:
                 self._active_actions.remove(action)
+
+        elif event.type == pygame.MOUSEMOTION:
+            # We add to the delta because multiple motion events
+            # can happen between frames
+            self._mouse_delta[0] += event.rel[0]
+            self._mouse_delta[1] += event.rel[1]
+
+    def get_mouse_delta(self) -> tuple[float, float]:
+        """
+        Returns the (dx, dy) since the last frame and resets the delta.
+        Call this once per update loop.
+        """
+        dx = self._mouse_delta[0] * self.mouse_sensitivity
+        dy = self._mouse_delta[1] * self.mouse_sensitivity
+
+        # Reset delta for the next frame
+        self._mouse_delta = [0.0, 0.0]
+
+        return dx, dy
 
     def is_pressed(self, action: InputAction) -> bool:
         """Returns True if the action button is currently held."""

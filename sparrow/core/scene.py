@@ -4,11 +4,14 @@ import math
 from typing import TYPE_CHECKING, List
 
 import numpy as np
+import pygame
 from numpy.typing import NDArray
 
 from sparrow.core.components import Camera, Mesh, Transform
 from sparrow.core.world import World
 from sparrow.graphics.ecs.frame_submit import CameraData, DrawItem, RenderFrameInput
+from sparrow.input.context import InputContext
+from sparrow.input.handler import InputHandler
 from sparrow.types import EntityId
 
 if TYPE_CHECKING:
@@ -163,6 +166,18 @@ class Scene:
 
         self.frame_index = 0
         self.last_time = 0
+
+        input_handler = InputHandler()
+        self.world.add_resource(input_handler)
+
+        base_ctx = InputContext("default")
+        base_ctx.bind(pygame.K_w, "UP")
+        base_ctx.bind(pygame.K_s, "DOWN")
+        base_ctx.bind(pygame.K_a, "LEFT")
+        base_ctx.bind(pygame.K_d, "RIGHT")
+        base_ctx.bind(pygame.K_SPACE, "SPACE")
+
+        input_handler.push_context(base_ctx)
 
     def on_start(self) -> None:
         """Called when the scene is first activated."""

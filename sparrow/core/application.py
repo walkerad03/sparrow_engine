@@ -52,7 +52,6 @@ class Application:
         )
         self.renderer.initialize()
 
-        self.input = InputHandler()
         self.clock = pygame.Clock()
         self.running = False
         self.active_scene: Optional[Scene] = None
@@ -69,7 +68,9 @@ class Application:
                     if event.key == pygame.K_ESCAPE:
                         self.running = False
 
-                self.input.process_event(event)
+                if self.active_scene:
+                    inp = self.active_scene.world.get_resource(InputHandler)
+                    inp.process_event(event)
 
             if self.active_scene:
                 now = time.perf_counter()
@@ -77,9 +78,7 @@ class Application:
                 self.active_scene.last_time = now
 
                 self.active_scene.on_update(dt)
-
                 frame = self.active_scene.get_render_frame()
-
                 self.renderer.render_frame(frame)
 
             pygame.display.flip()
