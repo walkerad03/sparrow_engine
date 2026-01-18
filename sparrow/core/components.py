@@ -1,8 +1,11 @@
+import math
 from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
 
+from sparrow.graphics.util.ids import MaterialId, MeshId
 from sparrow.types import EntityId, Quaternion, Rect, Vector2, Vector3
 
 # --- SPATIAL COMPONENTS ---
@@ -25,8 +28,7 @@ def transform_to_matrix(
     # Calculate standard matrix
     model = T @ R @ S
 
-    # FIX: Return the Transpose so it arrives correctly in OpenGL
-    return model.T
+    return model
 
 
 @dataclass(frozen=True)
@@ -35,17 +37,18 @@ class Transform:
     The physical location of an entity in the world.
     """
 
-    x: float
-    y: float
-    z: float = 0.0
-    # pos: Vector3 = Vector3(0.0, 0.0, 0.0)
+    pos: Vector3 = Vector3(0.0, 0.0, 0.0)
     # rot: float = 0.0  # Radians
     rot: Quaternion = Quaternion.identity()
-    scale: Vector3 = Vector3(16.0, 16.0, 16.0)
+    scale: Vector3 = Vector3(1.0, 1.0, 1.0)
 
-    @property  # TODO: Remove this in favor of true `pos` attribute
-    def pos(self) -> Vector3:
-        return Vector3(self.x, self.y, self.z)
+    @property
+    def matrix_transform(self) -> NDArray[np.float32]:
+        return transform_to_matrix(
+            self.pos,
+            self.rot,
+            self.scale,
+        )
 
 
 @dataclass(frozen=True)
@@ -121,6 +124,51 @@ class ChildOf:
 
     parent: EntityId
     offset: Vector2 = Vector2(0.0, 0.0)
+
+
+@dataclass
+class Camera:
+    fov: float
+    width: int
+    height: int
+    near_clip: float
+    far_clip: float
+
+    target: NDArray[np.float32]
+
+    @property
+    def aspect_ratio(self) -> float:
+        return self.width / self.height
+
+    @property
+    def projection_matrix(self) -> NDArray[np.float32]:
+        """
+        Calculates the infinite perspective projection matrix.
+        Cached property logic could be added here if this becomes a bottleneck.
+        """
+        aspect = self.aspect_ratio
+        tan_half_fov = math.tan(math.radians(self.fov) * 0.5)
+        fl = 1.0 / tan_half_fov
+
+        inv_nf = 1.0 / (self.near_clip - self.far_clip)
+        p22 = (self.far_clip + self.near_clip) * inv_nf
+        p23 = (2.0 * self.far_clip * self.near_clip) * inv_nf
+
+        return np.array(
+            [
+                [fl / aspect, 0.0, 0.0, 0.0],
+                [0.0, fl, 0.0, 0.0],
+                [0.0, 0.0, p22, p23],
+                [0.0, 0.0, -1.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+
+
+@dataclass
+class Mesh:
+    mesh_id: MeshId
+    material_id: MaterialId
 
 
 @dataclass

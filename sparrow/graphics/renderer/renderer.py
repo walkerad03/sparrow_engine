@@ -16,8 +16,10 @@ from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.compilation import compile_render_graph
 from sparrow.graphics.graph.pass_base import RenderServices
 from sparrow.graphics.graph.render_graph import CompiledRenderGraph
+from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.settings import (
+    DeferredRendererSettings,
     RaytracingRendererSettings,
     RendererSettings,
 )
@@ -65,11 +67,11 @@ class Renderer:
         self._activate_builder(builder, reason="initial")
 
     def _default_pipeline_setup(self, builder: RenderGraphBuilder) -> None:
-        # if isinstance(self.settings, DeferredRendererSettings):
-        #    build_deferred_pipeline(builder, self.settings)
+        if isinstance(self.settings, DeferredRendererSettings):
+            build_deferred_pipeline(builder, self.settings)
         # elif isinstance(self.settings, ForwardRendererSettings):
         #    build_forward_pipeline(builder, self.settings)
-        if isinstance(self.settings, RaytracingRendererSettings):
+        elif isinstance(self.settings, RaytracingRendererSettings):
             build_raytracing_pipeline(builder, self.settings)
         # elif isinstance(self.settings, BlitRendererSettings):
         #    build_blit_pipeline(builder, self.settings)

@@ -33,13 +33,11 @@ class MeshManager:
         self._load_engine_defaults()
 
     def _load_engine_defaults(self) -> None:
-        """
         self.create(
             MeshId("engine.suzanne"),
             load_obj("sparrow/graphics/meshes/default/suzanne.obj"),
             label="Suzanne",
         )
-        """
 
         self.create(
             MeshId("engine.cube"),
