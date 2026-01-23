@@ -1,10 +1,11 @@
 from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.resources import TextureDesc
 from sparrow.graphics.passes.deferred_lighting import DeferredLightingPass
+from sparrow.graphics.passes.fraunhofer_bloom import FraunhoferBloomPass
 from sparrow.graphics.passes.gbuffer import GBufferPass
 from sparrow.graphics.passes.tonemap import TonemapPass
 from sparrow.graphics.renderer.settings import DeferredRendererSettings
-from sparrow.graphics.util.ids import PassId, ResourceId
+from sparrow.graphics.util.ids import PassId, ResourceId, TextureId
 
 
 def build_deferred_pipeline(
@@ -40,6 +41,10 @@ def build_deferred_pipeline(
         ResourceId("light_accum"),
         TextureDesc(w, h, 4, "f2"),
     )
+    bloomed_light = builder.add_texture(
+        ResourceId("bloomed_light"),
+        TextureDesc(w, h, components=4, dtype="f2"),
+    )
 
     builder.add_pass(
         PassId("gbuffer"),
@@ -67,10 +72,21 @@ def build_deferred_pipeline(
     )
 
     builder.add_pass(
+        PassId("bloom"),
+        FraunhoferBloomPass(
+            pass_id=PassId("bloom"),
+            settings=settings,
+            input_hdr=light_accum,
+            output_bloom=bloomed_light,
+            aperture_tex_id=TextureId("engine.pupil_aperture"),
+        ),
+    )
+
+    builder.add_pass(
         PassId("tonemap"),
         TonemapPass(
             pass_id=PassId("tonemap"),
             settings=settings,
-            hdr_in=light_accum,
+            hdr_in=bloomed_light,
         ),
     )

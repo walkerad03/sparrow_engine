@@ -1,0 +1,72 @@
+#version 460 core
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(rgba16f, binding = 0) writeonly uniform image2D img_output;
+
+uniform sampler2D u_input_hdr;
+uniform sampler2D u_aperture;
+
+uniform float u_threshold = 0.3;
+uniform float u_intensity = 100.0;
+uniform float u_radius = 25; 
+
+const int SAMPLE_COUNT = 32; 
+
+// ... (Keep Hash functions) ...
+float hash12(vec2 p) {
+    vec3 p3  = fract(vec3(p.xyx) * .1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+float get_brightness(vec3 color) {
+    return max(color.r, max(color.g, color.b));
+}
+
+void main() {
+    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 out_size = imageSize(img_output);
+
+    if (pixel_coords.x >= out_size.x || pixel_coords.y >= out_size.y) return;
+
+    vec2 uv = (vec2(pixel_coords) + 0.5) / vec2(out_size);
+    vec3 source_color = textureLod(u_input_hdr, uv, 0).rgb;
+    vec3 total_glare = vec3(0.0);
+    float rnd = hash12(vec2(pixel_coords));
+    
+    // Calculate Aspect Ratio
+    float aspect = float(out_size.x) / float(out_size.y);
+
+    for (int i = 0; i < SAMPLE_COUNT; ++i) {
+        float t = float(i) / float(SAMPLE_COUNT);
+        float theta = t * 2.3999632 * 32.0 + (rnd * 6.28); 
+        float r = sqrt(t) * u_radius;
+
+        // 1. Calculate Raw Offset (Circular)
+        vec2 raw_offset = vec2(cos(theta), sin(theta)) * r;
+        
+        // 2. Screen Offset (Aspect Corrected - making it an oval in UVs to look round on screen)
+        vec2 screen_offset = raw_offset;
+        screen_offset.x /= aspect; 
+
+        // 3. Sample Scene
+        vec2 sample_uv = uv + screen_offset;
+        if (sample_uv.x < 0.0 || sample_uv.x > 1.0 || sample_uv.y < 0.0 || sample_uv.y > 1.0) continue;
+
+        vec3 color = textureLod(u_input_hdr, sample_uv, 0).rgb;
+        
+        float b = get_brightness(color);
+        if (b > u_threshold) {
+            // 4. Aperture Lookup (Use RAW offset, normalized)
+            // If we used screen_offset here, the aperture would stretch.
+            vec2 aperture_uv = (raw_offset / u_radius) * 0.5 + 0.5;
+            
+            vec3 diffraction = textureLod(u_aperture, aperture_uv, 0).rgb;
+            total_glare += color * diffraction; 
+        }
+    }
+
+    total_glare = (total_glare / float(SAMPLE_COUNT)) * u_intensity;
+    vec3 final_color = source_color + total_glare;
+    imageStore(img_output, pixel_coords, vec4(final_color, 1.0));
+}

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 import moderngl
+from PIL import Image
 
 from sparrow.graphics.helpers.spectral_sky import generate_spectral_sky_lut
 from sparrow.graphics.util.ids import TextureId
@@ -49,6 +50,20 @@ class TextureManager:
             components=4,
             dtype="f4",
             label="Default Sky LUT",
+        )
+
+        img = Image.open(
+            "sparrow/graphics/assets/defaults/textures/pupil_diffraction.png"
+        ).convert("RGBA")
+
+        self.create_from_bytes(
+            tex_id=TextureId("engine.pupil_aperture"),
+            data=img.tobytes(),
+            width=img.width,
+            height=img.height,
+            components=4,
+            dtype="f1",
+            label="Pupil Aperture",
         )
 
     def create_from_bytes(

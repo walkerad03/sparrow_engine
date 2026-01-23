@@ -8,6 +8,7 @@ import numpy as np
 
 EntityId = NewType("EntityId", int)
 ArchetypeMask = NewType("ArchetypeMask", int)
+SystemId = NewType("SystemId", str)
 
 Rect = Tuple[float, float, float, float]  # x, y, w, h
 

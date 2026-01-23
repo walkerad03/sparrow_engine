@@ -96,7 +96,7 @@ def generate_spectral_sky_lut(
     sun_elevation: float = 45.2,
     sun_rotation: float = 179.0,
     sun_size: float = 0.545,
-    sun_intensity: float = 1.0,
+    sun_intensity: float = 100.0,
     sun_radiance: float = 1.0e4,
     sun_softness_deg: float = 0.1,
     altitude: float = 148.0,

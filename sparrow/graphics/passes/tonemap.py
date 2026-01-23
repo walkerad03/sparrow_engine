@@ -79,13 +79,13 @@ class TonemapPass(RenderPass):
         program = services.shader_manager.get(req).program
         if not isinstance(program, moderngl.Program):
             raise RuntimeError("TonemapPass requires a graphics Program")
+        self._program = program
 
         self._set_sampler("u_hdr", 0)
 
         vbo = create_fullscreen_triangle(ctx)
         vao = ctx.vertex_array(program, [(vbo, "2f", "in_pos")])
 
-        self._program = program
         super().on_graph_compiled(ctx=ctx, resources=resources, services=services)
 
         self._vao = vao

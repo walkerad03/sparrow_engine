@@ -17,9 +17,11 @@ from sparrow.graphics.graph.compilation import compile_render_graph
 from sparrow.graphics.graph.pass_base import RenderServices
 from sparrow.graphics.graph.render_graph import CompiledRenderGraph
 from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
+from sparrow.graphics.pipelines.forward import build_forward_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.settings import (
     DeferredRendererSettings,
+    ForwardRendererSettings,
     RaytracingRendererSettings,
     RendererSettings,
 )
@@ -49,7 +51,8 @@ class Renderer:
     _graph: CompiledRenderGraph | None = None
 
     def initialize(
-        self, setup_pipeline: Optional[Callable[[RenderGraphBuilder], None]] = None
+        self,
+        setup_pipeline: Optional[Callable[[RenderGraphBuilder], None]] = None,
     ) -> None:
         """Initialize managers and build the default render graph."""
         self._shader_mgr = ShaderManager(self.gl, include_paths=[])
@@ -62,6 +65,7 @@ class Renderer:
         if setup_pipeline:
             setup_pipeline(builder)
         else:
+            print(self.settings)
             self._default_pipeline_setup(builder)
 
         self._activate_builder(builder, reason="initial")
@@ -69,8 +73,8 @@ class Renderer:
     def _default_pipeline_setup(self, builder: RenderGraphBuilder) -> None:
         if isinstance(self.settings, DeferredRendererSettings):
             build_deferred_pipeline(builder, self.settings)
-        # elif isinstance(self.settings, ForwardRendererSettings):
-        #    build_forward_pipeline(builder, self.settings)
+        elif isinstance(self.settings, ForwardRendererSettings):
+            build_forward_pipeline(builder, self.settings)
         elif isinstance(self.settings, RaytracingRendererSettings):
             build_raytracing_pipeline(builder, self.settings)
         # elif isinstance(self.settings, BlitRendererSettings):
@@ -114,7 +118,9 @@ class Renderer:
         assert isinstance(self._builder, RenderGraphBuilder)
         return deepcopy(self._builder)
 
-    def _activate_builder(self, builder: RenderGraphBuilder, *, reason: str) -> None:
+    def _activate_builder(
+        self, builder: RenderGraphBuilder, *, reason: str
+    ) -> None:
         """
         Activate a given RenderGraphBuilder.
         """
@@ -133,7 +139,9 @@ class Renderer:
             texture_manager=self._texture_mgr,
         )
 
-        graph = compile_render_graph(gl=self.gl, builder=builder, services=services)
+        graph = compile_render_graph(
+            gl=self.gl, builder=builder, services=services
+        )
 
         self._builder = builder
         self._graph = graph

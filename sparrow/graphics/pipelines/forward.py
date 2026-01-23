@@ -10,34 +10,35 @@ from sparrow.graphics.util.ids import PassId, ResourceId
 def build_forward_pipeline(
     builder: RenderGraphBuilder, settings: ForwardRendererSettings
 ):
-    width, height = (
-        settings.resolution.logical_width,
-        settings.resolution.logical_height,
-    )
+    if not isinstance(settings, ForwardRendererSettings):
+        raise TypeError(
+            f"build_forward_pipeline expects ForwardRendererSettings, got {type(settings)!r}"
+        )
 
-    albedo_rid = builder.add_texture(
-        ResourceId("albedo"), TextureDesc(width, height, 4, "f2", label="MainColor")
-    )
-    depth_rid = builder.add_texture(
-        ResourceId("depth"),
-        TextureDesc(width, height, 1, "f4", depth=True, label="Depth"),
-    )
-
-    pid = PassId("forward")
-    builder.add_pass(
-        pid,
-        ForwardPass(
-            pass_id=pid,
-            out_albedo=albedo_rid,
-            out_depth=depth_rid,
+    albedo = builder.add_texture(
+        ResourceId("albedo"),
+        TextureDesc(
+            settings.resolution.logical_width,
+            settings.resolution.logical_height,
+            4,
+            "f2",
         ),
     )
 
-    pid = PassId("tonemap")
     builder.add_pass(
-        pid,
+        PassId("forward"),
+        ForwardPass(
+            pass_id=PassId("forward"),
+            settings=settings,
+            out_tex=albedo,
+        ),
+    )
+
+    builder.add_pass(
+        PassId("present"),
         TonemapPass(
-            pass_id=pid,
-            hdr_in=albedo_rid,
+            pass_id=PassId("present"),
+            hdr_in=albedo,
+            settings=settings,
         ),
     )

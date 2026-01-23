@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 import pygame
 
 from sparrow.core.components import Mesh, Transform
+from sparrow.core.scheduler import Scheduler, Stage
 from sparrow.core.world import World
 from sparrow.graphics.ecs.frame_submit import DrawItem, RenderFrameInput
 from sparrow.graphics.renderer.settings import (
-    PresentScaleMode,
-    RaytracingRendererSettings,
+    DeferredRendererSettings,
+    ForwardRendererSettings,
+    RendererSettings,
     ResolutionSettings,
     SunlightSettings,
 )
@@ -22,7 +24,6 @@ from sparrow.resources.rendering import (
     RenderFrame,
     RenderViewport,
 )
-from sparrow.systems.camera import camera_system
 from sparrow.systems.rendering import ensure_renderer_resource, render_system
 
 if TYPE_CHECKING:
@@ -32,10 +33,18 @@ if TYPE_CHECKING:
 class Scene:
     render_enabled: bool = True
 
-    def __init__(self, app: Application):
+    def __init__(
+        self,
+        app: Application,
+        renderer_settings: Optional[RendererSettings] = None,
+    ):
         self.world = World()
-
         self.app = app
+        self.scheduler = Scheduler()
+
+        self._pending_renderer_settings = renderer_settings
+
+        self._register_default_systems()
 
         self.frame_index = 0
         self.last_time = 0
@@ -54,15 +63,20 @@ class Scene:
 
         self.world.add_resource(CameraOutput())
 
+    def _register_default_systems(self): ...
+
     def on_start(self) -> None:
         """Called when the scene is first activated."""
-        pass
+        self.scheduler.run_stage(Stage.STARTUP, self.world)
 
     def on_update(self, dt: float) -> None:
         """Called every frame to update game logic."""
         self.frame_index += 1
 
-        camera_system(self.world)
+        self.scheduler.run_stage(Stage.INPUT, self.world)
+        self.scheduler.run_stage(Stage.UPDATE, self.world)
+        self.scheduler.run_stage(Stage.PHYSICS, self.world)
+        self.scheduler.run_stage(Stage.POST_UPDATE, self.world)
 
         # TODO: Poll input, window events, resize handling.
         # If resized, update renderer settings and rebuild graph or trigger resize path.
@@ -91,27 +105,27 @@ class Scene:
             return
 
         if self.world.try_resource(RenderContext) is None:
-            raise RuntimeError("RenderContext resource missing for renderer setup.")
+            raise RuntimeError(
+                "RenderContext resource missing for renderer setup."
+            )
 
         if self.world.try_resource(RendererSettingsResource) is None:
-            viewport = self.world.try_resource(RenderViewport)
-            if viewport is None:
-                raise RuntimeError(
-                    "RenderViewport resource missing for renderer setup."
+            if self._pending_renderer_settings:
+                settings = self._pending_renderer_settings
+            else:
+                viewport = self.world.try_resource(RenderViewport)
+                if viewport is None:
+                    raise RuntimeError(
+                        "RenderViewport resource missing for renderer setup."
+                    )
+
+                resolution = ResolutionSettings(
+                    logical_width=viewport.width,
+                    logical_height=viewport.height,
                 )
+                sunlight = SunlightSettings()
+                settings = ForwardRendererSettings(resolution, sunlight)
 
-            resolution = ResolutionSettings(
-                logical_width=int(viewport.width / 1),
-                logical_height=int(viewport.height / 1),
-                scale_mode=PresentScaleMode.INTEGER_FIT,
-            )
-
-            settings = RaytracingRendererSettings(
-                resolution,
-                SunlightSettings(),
-                samples_per_pixel=16,
-                denoiser_enabled=False,
-            )
             self.world.add_resource(RendererSettingsResource(settings))
 
         ensure_renderer_resource(self.world)
@@ -123,7 +137,9 @@ class Scene:
         """
         viewport = self.world.try_resource(RenderViewport)
         if viewport is None:
-            raise RuntimeError("RenderViewport resource missing for render frame.")
+            raise RuntimeError(
+                "RenderViewport resource missing for render frame."
+            )
 
         w, h = viewport.width, viewport.height
 

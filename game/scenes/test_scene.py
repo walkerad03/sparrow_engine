@@ -5,15 +5,44 @@ import numpy as np
 
 from sparrow.core.components import Camera, Mesh, Transform
 from sparrow.core.scene import Scene
+from sparrow.core.scheduler import Stage
 from sparrow.graphics.assets.material_manager import Material
+from sparrow.graphics.renderer.settings import (
+    ForwardRendererSettings,
+    ResolutionSettings,
+    SunlightSettings,
+)
 from sparrow.graphics.util.ids import MaterialId, MeshId
 from sparrow.input.handler import InputHandler
-from sparrow.resources.rendering import RenderViewport, RendererResource
-from sparrow.types import Vector3
+from sparrow.resources.rendering import (
+    RendererResource,
+    RendererSettingsResource,
+    RenderViewport,
+)
+from sparrow.systems.camera import camera_system
+from sparrow.types import SystemId, Vector3
+
+
+class SystemNames:
+    CAMERA = SystemId("camera")
 
 
 class TestScene(Scene):
     def on_start(self):
+        self.scheduler.add_system(
+            Stage.POST_UPDATE,
+            camera_system,
+            name=SystemNames.CAMERA,
+        )
+
+        viewport = self.world.get_resource(RenderViewport)
+        w, h = viewport.width, viewport.height
+
+        resolution = ResolutionSettings(logical_width=w, logical_height=h)
+        sunlight = SunlightSettings()
+        settings = ForwardRendererSettings(resolution, sunlight)
+        self.world.add_resource(RendererSettingsResource(settings))
+
         renderer = self.world.get_resource(RendererResource).renderer
         renderer.material_manager.create(
             MaterialId("copper"),
@@ -32,9 +61,6 @@ class TestScene(Scene):
                 roughness=0.9,
             ),
         )
-
-        viewport = self.world.get_resource(RenderViewport)
-        w, h = viewport.width, viewport.height
 
         x_pos = math.sin(self.frame_index + 35 / 100.0) * 4.0
         y_pos = 1.25
