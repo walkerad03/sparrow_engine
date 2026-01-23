@@ -35,44 +35,44 @@ class MeshManager:
     def _load_engine_defaults(self) -> None:
         self.create(
             MeshId("engine.suzanne"),
-            load_obj("sparrow/graphics/meshes/default/suzanne.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/suzanne.obj"),
             label="Suzanne",
         )
 
         self.create(
             MeshId("engine.cube"),
-            load_obj("sparrow/graphics/meshes/default/cube.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/cube.obj"),
             label="Cube",
         )
 
         """
         self.create(
             MeshId("engine.dense_icosphere"),
-            load_obj("sparrow/graphics/meshes/default/dense_icosphere.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/dense_icosphere.obj"),
             label="Dense Icosphere",
         )
 
         self.create(
             MeshId("engine.stanford_dragon"),
-            load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/xyzrgb_dragon.obj"),
             label="Stanford Dragon",
         )
 
         self.create(
             MeshId("engine.stanford_bunny"),
-            load_obj("sparrow/graphics/meshes/default/stanford-bunny.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/stanford-bunny.obj"),
             label="Stanford Bunny",
         )
         """
         self.create(
             MeshId("engine.large_plane"),
-            load_obj("sparrow/graphics/meshes/default/large_plane.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/large_plane.obj"),
             label="Large Plane",
         )
         """
         self.create(
             MeshId("engine.stanford_dragon_lowpoly"),
-            load_obj("sparrow/graphics/meshes/default/xyzrgb_dragon_decimated.obj"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/xyzrgb_dragon_decimated.obj"),
             label="Stanford Dragon (Low Poly)",
         )
         """
