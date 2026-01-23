@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from sparrow.core.components import Camera, Mesh, Transform
+from sparrow.core.components import Camera, Mesh, PointLight, Transform
 from sparrow.core.scene import Scene
 from sparrow.core.scheduler import Stage
 from sparrow.graphics.assets.material_manager import Material
@@ -81,7 +81,7 @@ class TestScene(Scene):
 
         self.world.create_entity(
             Mesh(
-                mesh_id=MeshId("engine.cube"),
+                mesh_id=MeshId("engine.suzanne"),
                 material_id=MaterialId("copper"),
             ),
             Transform(pos=Vector3(0.0, 1.0, 0.0), scale=Vector3(1.0, 1.0, 1.0)),
@@ -95,11 +95,22 @@ class TestScene(Scene):
             Transform(pos=Vector3(0.0, 0.0, 0.0), scale=Vector3(2.5, 2.5, 2.5)),
         )
 
+        self.world.create_entity(
+            Transform(pos=Vector3(0.0, 5.0, 5.0)),
+            PointLight(
+                color=(0.25, 0.2, 0.2),
+                intensity=50.0,
+                radius=20.0,
+            ),
+        )
+
         inp = self.world.get_resource(InputHandler)
         if inp is None:
             return
 
         inp.set_mouse_lock(True)
+
+        super().on_start()
 
     def on_update(self, dt: float):
         super().on_update(dt)

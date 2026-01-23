@@ -4,10 +4,14 @@ from typing import TYPE_CHECKING, List, Optional
 
 import pygame
 
-from sparrow.core.components import Mesh, Transform
+from sparrow.core.components import Mesh, PointLight, Transform
 from sparrow.core.scheduler import Scheduler, Stage
 from sparrow.core.world import World
-from sparrow.graphics.ecs.frame_submit import DrawItem, RenderFrameInput
+from sparrow.graphics.ecs.frame_submit import (
+    DrawItem,
+    LightPoint,
+    RenderFrameInput,
+)
 from sparrow.graphics.renderer.settings import (
     DeferredRendererSettings,
     ForwardRendererSettings,
@@ -160,12 +164,26 @@ class Scene:
             )
             draw_id += 1
 
+        point_lights: List[LightPoint] = []
+        light_id = 0
+        for eid, light, transform in self.world.join(PointLight, Transform):
+            point_lights.append(
+                LightPoint(
+                    transform.pos,
+                    light.radius,
+                    light.color,
+                    light.intensity,
+                    light_id,
+                )
+            )
+            light_id += 1
+
         return RenderFrameInput(
             frame_index=self.frame_index,
             dt_seconds=1 / 60,
             camera=cam_out.active,
             draws=draws,
-            point_lights=[],
+            point_lights=point_lights,
             viewport_width=w,
             viewport_height=h,
         )

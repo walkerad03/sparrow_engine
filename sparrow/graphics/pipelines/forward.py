@@ -25,12 +25,24 @@ def build_forward_pipeline(
         ),
     )
 
+    depth = builder.add_texture(
+        ResourceId("depth"),
+        TextureDesc(
+            settings.resolution.logical_width,
+            settings.resolution.logical_height,
+            1,
+            "f4",
+            depth=True,
+        ),
+    )
+
     builder.add_pass(
         PassId("forward"),
         ForwardPass(
             pass_id=PassId("forward"),
             settings=settings,
-            out_tex=albedo,
+            albedo_tex=albedo,
+            depth_tex=depth,
         ),
     )
 

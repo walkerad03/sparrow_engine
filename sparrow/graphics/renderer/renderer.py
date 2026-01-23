@@ -65,7 +65,6 @@ class Renderer:
         if setup_pipeline:
             setup_pipeline(builder)
         else:
-            print(self.settings)
             self._default_pipeline_setup(builder)
 
         self._activate_builder(builder, reason="initial")
@@ -145,12 +144,13 @@ class Renderer:
 
         self._builder = builder
         self._graph = graph
-
+        """
         dump_render_graph_state(
             graph=self._graph,
             gl=self.gl,
             header="POST-COMPILE GRAPH STATE",
         )
+        """
 
     @property
     def shader_manager(self) -> ShaderManager:

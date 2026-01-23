@@ -106,7 +106,9 @@ class BoxCollider:
     width: float
     height: float
     offset: Vector2 = Vector2(0.0, 0.0)
-    is_trigger: bool = False  # If True, detects overlap but doesn't block movement
+    is_trigger: bool = (
+        False  # If True, detects overlap but doesn't block movement
+    )
 
     @property
     def bounds(self) -> Rect:
@@ -176,3 +178,10 @@ class RenderSettings:
     enable_bloom: bool = True
     enable_ssao: bool = False
     enable_chromatic: bool = False
+
+
+@dataclass
+class PointLight:
+    color: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    intensity: float = 1.0
+    radius: float = 10.0

@@ -6,6 +6,7 @@ from typing import Mapping, Optional
 
 import moderngl
 
+from sparrow.graphics.ecs.frame_submit import LightPoint
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
@@ -15,6 +16,7 @@ from sparrow.graphics.graph.pass_base import (
     RenderServices,
 )
 from sparrow.graphics.graph.resources import (
+    FramebufferResource,
     GraphResource,
     TextureResource,
     expect_resource,
@@ -36,24 +38,34 @@ class ForwardPass(RenderPass):
     pass_id: PassId
     settings: ForwardRendererSettings
 
-    out_tex: ResourceId
+    albedo_tex: ResourceId
+    depth_tex: ResourceId
 
     features: PassFeatures = PassFeatures.CAMERA
 
     _u_model: moderngl.Uniform | None = None
     _u_base_color: moderngl.Uniform | None = None
+    _u_light_color: moderngl.Uniform | None = None
+    _u_light_pos: moderngl.Uniform | None = None
 
     @property
     def output_target(self) -> Optional[ResourceId]:
-        return self.out_tex
+        return self.albedo_tex
 
     def build(self) -> PassBuildInfo:
-        writes = []
+        writes = [
+            PassResourceUse(
+                resource=self.depth_tex,
+                access="write",
+                stage="depth",
+                binding=0,
+            )
+        ]
 
-        if self.out_tex:
+        if self.output_target:
             writes.append(
                 PassResourceUse(
-                    resource=self.out_tex,
+                    resource=self.output_target,
                     access="write",
                     stage="color",
                     binding=0,
@@ -91,6 +103,8 @@ class ForwardPass(RenderPass):
         self._u_model: moderngl.Uniform = prog["u_model"]
 
         self._u_base_color: moderngl.Uniform = prog.get("u_base_color", None)
+        self._u_light_color: moderngl.Uniform = prog.get("u_light_color", None)
+        self._u_light_pos: moderngl.Uniform = prog.get("u_light_pos", None)
 
         self._program = prog
         super().on_graph_compiled(
@@ -103,9 +117,9 @@ class ForwardPass(RenderPass):
         gl = exec_ctx.gl
         services = exec_ctx.services
 
-        if self.out_tex:
+        if self.output_target:
             fbo_res = expect_resource(
-                exec_ctx.resources, self.out_tex, TextureResource
+                exec_ctx.resources, self.output_fbo_id, FramebufferResource
             )
             fbo = fbo_res.handle
             fbo.use()
@@ -119,6 +133,26 @@ class ForwardPass(RenderPass):
 
         assert isinstance(self._program, moderngl.Program)
         assert self._u_model
+
+        light_color = (1.0, 1.0, 1.0)
+        if exec_ctx.frame.point_lights:
+            li: LightPoint = exec_ctx.frame.point_lights[0]
+            light_color = (
+                li.color_rgb[0],
+                li.color_rgb[1],
+                li.color_rgb[2],
+            )
+            light_pos = (
+                li.position_ws[0],
+                li.position_ws[1],
+                li.position_ws[2],
+            )
+
+        if self._u_light_color:
+            self._u_light_color.value = light_color
+
+        if self._u_light_pos:
+            self._u_light_pos.value = light_pos
 
         for draw in exec_ctx.frame.draws:
             mesh_id = MeshId(draw.mesh_id)

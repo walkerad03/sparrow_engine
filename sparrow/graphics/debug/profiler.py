@@ -34,6 +34,16 @@ def profile(*, out_dir: Path, enabled: bool = True):
 
                 stats = pstats.Stats(profiler)
 
+                cmds: list[str] = ["tottime", "cumtime", "calls"]
+                paths: list[Path] = [out_dir / f"{base}.{x}.txt" for x in cmds]
+
+                for path, cmd in zip(paths, cmds):
+                    buf = io.StringIO()
+                    stats = pstats.Stats(profiler, stream=buf)
+                    stats.sort_stats(cmd).print_stats(30)
+                    path.write_text(buf.getvalue())
+                    print(f"[profile] wrote {path}")
+
                 frame_count = 0
                 for (_, _, name), (
                     cc,
@@ -51,19 +61,8 @@ def profile(*, out_dir: Path, enabled: bool = True):
                 total_time = stats.total_tt
                 fps = frame_count / total_time if total_time > 0 else 0
 
-                print(f"\n[profile] Execution results for {base}:")
                 print(f"[profile] Total Time: {total_time:.4f}s")
                 print(f"[profile] Average FPS: {fps:.2f}")
-
-                cmds: list[str] = ["tottime", "cumtime", "calls"]
-                paths: list[Path] = [out_dir / f"{base}.{x}.txt" for x in cmds]
-
-                for path, cmd in zip(paths, cmds):
-                    buf = io.StringIO()
-                    stats = pstats.Stats(profiler, stream=buf)
-                    stats.sort_stats(cmd).print_stats(30)
-                    path.write_text(buf.getvalue())
-                    print(f"[profile] wrote {path}")
 
                 print("[profile] profiling complete")
 

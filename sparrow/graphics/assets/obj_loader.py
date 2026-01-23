@@ -55,7 +55,9 @@ def load_obj(path: str) -> MeshData:
 
                     px, py, pz = positions[v_idx]
                     nx, ny, nz = (
-                        normals[vn_idx] if vn_idx is not None else (0.0, 0.0, 1.0)
+                        normals[vn_idx]
+                        if vn_idx is not None
+                        else (0.0, 0.0, 1.0)
                     )
                     u, v = uvs[vt_idx] if vt_idx is not None else (0.0, 0.0)
 
@@ -66,77 +68,8 @@ def load_obj(path: str) -> MeshData:
         if not vertices:
             raise ValueError(f"No geometry found in OBJ: {path}")
 
-        print(f"[{path}] Load Complete")
-        print(
-            f"  > Raw Data:   {len(positions)} pos | {len(normals)} norms | {len(uvs)} uvs"
-        )
-        print(
-            f"  > Geometry:   {len(vertices)} vertices ({len(vertices) // 3} triangles)"
-        )
-
-        if positions:
-            # Calculate bounds to catch scale/rotation issues
-            xs = [p[0] for p in positions]
-            ys = [p[1] for p in positions]
-            zs = [p[2] for p in positions]
-            print(f"  > Bounds X:   {min(xs):.3f} to {max(xs):.3f}")
-            print(f"  > Bounds Y:   {min(ys):.3f} to {max(ys):.3f}")
-            print(f"  > Bounds Z:   {min(zs):.3f} to {max(zs):.3f}")
-        print("------------------------------------------------")
-        print("  > First Face Inspection (Assembled Data):")
-        # Check the first 3 vertices (the first triangle)
-        for i in range(min(3, len(vertices))):
-            # Unpack the 32 bytes back into floats to see what actually got saved
-            # Format "3f 3f 2f" = (x,y,z) (nx,ny,nz) (u,v)
-            data = struct.unpack("3f 3f 2f", vertices[i])
-
-            p_vals = [f"{v:.2f}" for v in data[0:3]]
-            n_vals = [f"{v:.2f}" for v in data[3:6]]
-            uv_vals = [f"{v:.2f}" for v in data[6:8]]
-
-            print(f"    Vert {i}: Pos={p_vals}  Norm={n_vals}  UV={uv_vals}")
-
-        print("------------------------------------------------")
-
         vertex_blob = b"".join(vertices)
         stride = struct.calcsize("<3f3f2f")
-
-        # --- BINARY INSPECTION DEBUG ---
-        print(f"--- BINARY DUMP: {path} ---")
-        print(f"Total Bytes: {len(vertex_blob)}")
-        print(f"Vertex Count: {len(vertices)}")
-        print(f"Bytes per Vertex: {len(vertex_blob) / len(vertices)} (Expected: 32.0)")
-
-        # Print the first 2 vertices (64 bytes) in Hex
-        # We expect exactly 32 bytes per line if stride is correct
-        print("\nFirst 2 Vertices (Hex View):")
-        import binascii
-
-        # Take first 64 bytes
-        sample = vertex_blob[:64]
-
-        # Print in chunks of 32 bytes (1 vertex per row)
-        for i in range(0, len(sample), 32):
-            chunk = sample[i : i + 32]
-            hex_str = binascii.hexlify(chunk, sep=" ").decode("utf-8")
-            print(f"Vert {i // 32}: {hex_str}")
-
-            # Print decoded floats for this chunk to verify content
-            try:
-                # Unpack assuming the correct layout
-                floats = struct.unpack("<3f 3f 2f", chunk)
-                print(
-                    f"        -> Pos:({floats[0]:.2f}, {floats[1]:.2f}, {floats[2]:.2f}) "
-                    f"Norm:({floats[3]:.2f}, {floats[4]:.2f}, {floats[5]:.2f}) "
-                    f"UV:({floats[6]:.2f}, {floats[7]:.2f})"
-                )
-            except struct.error:
-                print(
-                    "        -> [ERROR] Could not unpack as 32-byte struct (Alignment mismatch?)"
-                )
-
-        print("------------------------------------------------")
-        # -------------------------------
 
         layout = VertexLayout(
             attributes=["in_pos", "in_normal", "in_uv"],

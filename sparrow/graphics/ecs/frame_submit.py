@@ -23,10 +23,11 @@ class CameraData:
 class LightPoint:
     """Simple point light for deferred lighting."""
 
-    position_ws: np.ndarray  # (3,)
+    position_ws: np.ndarray  # model transform matrix (3,)
     radius: float
     color_rgb: np.ndarray  # (3,)
     intensity: float
+    light_id: int
 
 
 @dataclass(frozen=True, slots=True)
