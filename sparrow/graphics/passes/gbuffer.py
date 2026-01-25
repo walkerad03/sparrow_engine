@@ -55,7 +55,7 @@ class GBufferPass(RenderPass):
     features: PassFeatures = PassFeatures.CAMERA
 
     _u_model: moderngl.Uniform | None = None
-    _u_base_color: moderngl.Uniform | None = None
+    _u_albedo: moderngl.Uniform | None = None
     _u_roughness: moderngl.Uniform | None = None
     _u_metalness: moderngl.Uniform | None = None
 
@@ -106,7 +106,7 @@ class GBufferPass(RenderPass):
             raise RuntimeError("Missing uniform u_model")
         self._u_model: moderngl.Uniform = prog["u_model"]
 
-        self._u_base_color: moderngl.Uniform = prog.get("u_base_color", None)
+        self._u_albedo: moderngl.Uniform = prog.get("u_albedo", None)
         self._u_roughness: moderngl.Uniform = prog.get("u_roughness", None)
         self._u_metalness: moderngl.Uniform = prog.get("u_metalness", None)
 
@@ -146,10 +146,8 @@ class GBufferPass(RenderPass):
 
             self._u_model.write(draw.model.astype(np.float32).T.tobytes())
 
-            if self._u_base_color is not None and hasattr(
-                material, "base_color_factor"
-            ):
-                self._u_base_color.value = material.base_color_factor
+            if self._u_albedo is not None and hasattr(material, "albedo"):
+                self._u_albedo.value = material.albedo
             if self._u_roughness is not None and hasattr(material, "roughness"):
                 self._u_roughness.value = material.roughness
             if self._u_metalness is not None and hasattr(material, "metalness"):
@@ -162,6 +160,6 @@ class GBufferPass(RenderPass):
         """Release any cached state owned by the pass (if applicable)."""
         self._program = None
         self._u_model = None
-        self._u_base_color = None
+        self._u_albedo = None
         self._u_roughness = None
         self._u_metalness = None

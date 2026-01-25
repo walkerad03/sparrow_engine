@@ -47,7 +47,7 @@ class ForwardPass(RenderPass):
     _u_light_color: moderngl.Uniform | None = None
     _u_light_pos: moderngl.Uniform | None = None
 
-    _u_mat_base_color: moderngl.Uniform | None = None
+    _u_mat_albedo: moderngl.Uniform | None = None
     _u_mat_roughness: moderngl.Uniform | None = None
     _u_mat_metallic: moderngl.Uniform | None = None
 
@@ -106,8 +106,8 @@ class ForwardPass(RenderPass):
         self._u_light_color: moderngl.Uniform = prog.get("u_light_color", None)
         self._u_light_pos: moderngl.Uniform = prog.get("u_light_pos", None)
 
-        self._u_mat_base_color: moderngl.Uniform = prog.get(
-            "u_material.base_color", None
+        self._u_mat_albedo: moderngl.Uniform = prog.get(
+            "u_material.albedo", None
         )
         self._u_mat_roughness: moderngl.Uniform = prog.get(
             "u_material.roughness", None
@@ -175,9 +175,9 @@ class ForwardPass(RenderPass):
 
             self._u_model.write(draw.model.astype(np.float32).T.tobytes())
 
-            if self._u_mat_base_color is not None:
-                color = getattr(material, "base_color", (1.0, 1.0, 1.0, 1.0))
-                self._u_mat_base_color.value = color
+            if self._u_mat_albedo is not None:
+                color = getattr(material, "albedo", (1.0, 1.0, 1.0))
+                self._u_mat_albedo.value = color
             if self._u_mat_roughness:
                 self._u_mat_roughness.value = getattr(
                     material, "roughness", 0.5
@@ -194,6 +194,6 @@ class ForwardPass(RenderPass):
         self._u_model = None
         self._u_light_color = None
         self._u_light_pos = None
-        self._u_mat_base_color = None
+        self._u_mat_albedo = None
         self._u_mat_roughness = None
         self._u_mat_metallic = None

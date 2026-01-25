@@ -13,7 +13,6 @@ from sparrow.graphics.ecs.frame_submit import (
     RenderFrameInput,
 )
 from sparrow.graphics.renderer.settings import (
-    DeferredRendererSettings,
     ForwardRendererSettings,
     RendererSettings,
     ResolutionSettings,

@@ -26,7 +26,7 @@ class Material:
         None  # occlusion/roughness/metalness packed rgb
     )
 
-    base_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
+    albedo: tuple[float, float, float] = (1.0, 1.0, 1.0)
     roughness: float = 0.5
     metallic: float = 0.0
 
@@ -39,7 +39,7 @@ class MaterialManager:
 
         self.create(
             MaterialId("engine.default"),
-            Material(base_color=(1.0, 1.0, 1.0, 1.0)),
+            Material(albedo=(1.0, 1.0, 1.0)),
         )
 
     def create(self, material_id: MaterialId, material: Material) -> None:

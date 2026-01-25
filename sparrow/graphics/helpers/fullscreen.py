@@ -22,6 +22,6 @@ def create_fullscreen_triangle(ctx: moderngl.Context) -> moderngl.Buffer:
         moderngl.Buffer: A buffer containing 3 vec2 positions (float64).
     """
     verts = (-1.0, -1.0, 3.0, -1.0, -1.0, 3.0)
-    data = struct.pack("6d", *verts)
+    data = struct.pack("6f", *verts)
 
     return ctx.buffer(data)

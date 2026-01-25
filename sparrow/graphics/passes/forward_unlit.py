@@ -59,7 +59,7 @@ class ForwardUnlitPass(RenderPass):
     _program: moderngl.Program | None = None
     _u_view_proj: moderngl.Uniform | None = None
     _u_model: moderngl.Uniform | None = None
-    _u_base_color: moderngl.Uniform | None = None
+    _u_albedo: moderngl.Uniform | None = None
     _fbo_rid: ResourceId | None = None
 
     @property
@@ -108,19 +108,19 @@ class ForwardUnlitPass(RenderPass):
 
         self._u_view_proj = self._program["u_view_proj"]
         self._u_model = self._program["u_model"]
-        self._u_base_color = self._program["u_base_color"]
+        self._u_albedo = self._program["u_albedo"]
 
         if (
             self._u_view_proj is None
             or self._u_model is None
-            or self._u_base_color is None
+            or self._u_albedo is None
         ):
             missing = [
                 name
                 for name, u in (
                     ("u_view_proj", self._u_view_proj),
                     ("u_model", self._u_model),
-                    ("u_base_color", self._u_base_color),
+                    ("u_albedo", self._u_albedo),
                 )
                 if u is None
             ]
@@ -181,7 +181,7 @@ class ForwardUnlitPass(RenderPass):
         )
 
         assert self._u_model is not None
-        assert self._u_base_color is not None
+        assert self._u_albedo is not None
 
         for di in frame.draws:
             mesh_id = MeshId(di.mesh_id)
@@ -190,7 +190,7 @@ class ForwardUnlitPass(RenderPass):
             mat: Material = services.material_manager.get(mat_id)
 
             self._u_model.write(di.model.astype(np.float32).T.tobytes())
-            self._u_base_color.value = mat.base_color
+            self._u_albedo.value = mat.albedo
 
             vao = services.mesh_manager.vao_for(mesh_id, self._program)
             vao.render(mode=moderngl.TRIANGLES)
@@ -199,5 +199,5 @@ class ForwardUnlitPass(RenderPass):
         self._program = None
         self._u_view_proj = None
         self._u_model = None
-        self._u_base_color = None
+        self._u_albedo = None
         self._fbo_rid = None

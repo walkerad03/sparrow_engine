@@ -22,7 +22,13 @@ from sparrow.graphics.graph.resources import (
 from sparrow.graphics.renderer.settings import RaytracingRendererSettings
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
-from sparrow.graphics.util.ids import MaterialId, MeshId, PassId, ResourceId, ShaderId
+from sparrow.graphics.util.ids import (
+    MaterialId,
+    MeshId,
+    PassId,
+    ResourceId,
+    ShaderId,
+)
 
 
 @dataclass(kw_only=True)
@@ -31,7 +37,9 @@ class RaytracingPass(RenderPass):
     out_texture: ResourceId
     settings: RaytracingRendererSettings
 
-    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.SUN | PassFeatures.TIME
+    features: PassFeatures = (
+        PassFeatures.CAMERA | PassFeatures.SUN | PassFeatures.TIME
+    )
 
     _triangle_buffer: moderngl.Buffer | None = None
     _light_buffer: moderngl.Buffer | None = None
@@ -41,7 +49,9 @@ class RaytracingPass(RenderPass):
             pass_id=self.pass_id,
             name="Raytrace",
             reads=[],
-            writes=[PassResourceUse(self.out_texture, "write", "storage", binding=0)],
+            writes=[
+                PassResourceUse(self.out_texture, "write", "storage", binding=0)
+            ],
         )
 
     def on_graph_compiled(
@@ -60,7 +70,9 @@ class RaytracingPass(RenderPass):
         )
         self._program = services.shader_manager.get(req).program
 
-        super().on_graph_compiled(ctx=ctx, resources=resources, services=services)
+        super().on_graph_compiled(
+            ctx=ctx, resources=resources, services=services
+        )
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         self.execute_base(exec_ctx)
@@ -89,10 +101,14 @@ class RaytracingPass(RenderPass):
             self._program["u_max_bounces"].value = self.settings.max_bounces
 
         if "u_samples_per_pixel" in self._program:
-            self._program["u_samples_per_pixel"].value = self.settings.samples_per_pixel
+            self._program[
+                "u_samples_per_pixel"
+            ].value = self.settings.samples_per_pixel
 
         if "u_denoiser_enabled" in self._program:
-            self._program["u_denoiser_enabled"].value = self.settings.denoiser_enabled
+            self._program[
+                "u_denoiser_enabled"
+            ].value = self.settings.denoiser_enabled
 
         for draw in exec_ctx.frame.draws:
             mesh_id = MeshId(draw.mesh_id)
@@ -113,7 +129,11 @@ class RaytracingPass(RenderPass):
 
                 # Iterate through indices in steps of 3
                 for i in range(0, len(indices), 3):
-                    idx0, idx1, idx2 = indices[i], indices[i + 1], indices[i + 2]
+                    idx0, idx1, idx2 = (
+                        indices[i],
+                        indices[i + 1],
+                        indices[i + 2],
+                    )
 
                     v0_local = np.append(positions[idx0], 1.0)
                     v1_local = np.append(positions[idx1], 1.0)
@@ -134,7 +154,7 @@ class RaytracingPass(RenderPass):
                     v2_local = np.append(positions[i + 2], 1.0)
 
                     mat_color_vec4 = getattr(
-                        material, "base_color_factor", (1.0, 1.0, 1.0, 1.0)
+                        material, "albedo", (1.0, 1.0, 1.0)
                     )
                     albedo_rgb = mat_color_vec4[:3]
                     metalness = getattr(material, "metalness", 0.0)
@@ -158,8 +178,9 @@ class RaytracingPass(RenderPass):
 
         if triangle_data:
             raw_data = struct.pack(f"{len(triangle_data)}f", *triangle_data)
-            if self._triangle_buffer is None or self._triangle_buffer.size < len(
-                raw_data
+            if (
+                self._triangle_buffer is None
+                or self._triangle_buffer.size < len(raw_data)
             ):
                 if self._triangle_buffer:
                     self._triangle_buffer.release()
@@ -179,7 +200,9 @@ class RaytracingPass(RenderPass):
 
         if light_data:
             raw_lights = struct.pack(f"{len(light_data)}f", *light_data)
-            if self._light_buffer is None or self._light_buffer.size < len(raw_lights):
+            if self._light_buffer is None or self._light_buffer.size < len(
+                raw_lights
+            ):
                 if self._light_buffer:
                     self._light_buffer.release()
                 self._light_buffer = exec_ctx.gl.buffer(raw_lights)
@@ -187,4 +210,6 @@ class RaytracingPass(RenderPass):
                 self._light_buffer.write(raw_lights)
 
             self._light_buffer.bind_to_storage_buffer(binding=2)
-            self._program["u_light_count"].value = len(exec_ctx.frame.point_lights)
+            self._program["u_light_count"].value = len(
+                exec_ctx.frame.point_lights
+            )
