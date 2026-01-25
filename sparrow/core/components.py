@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Optional, Tuple
 
 import numpy as np
@@ -57,13 +57,18 @@ class Transform:
 @dataclass(frozen=True)
 class RigidBody:
     mass: float = 1.0
-    velocity: Vector3 = Vector3(0.0, 0.0, 0.0)
-
+    velocity: Vector3 = field(default_factory=Vector3.zero)
     inverse_mass: float = 1.0  # 0.0 for infinite mass static objects
+
+    angular_velocity: Vector3 = field(default_factory=Vector3.zero)
+    inverse_inertia: Vector3 = field(
+        default_factory=lambda: Vector3(1.0, 1.0, 1.0)
+    )
+
+    angular_drag: float = 0.0
 
     restitution: float = 0.5
     friction: float = 0.5
-
     drag: float = 0.0
 
 

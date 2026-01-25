@@ -26,6 +26,9 @@ from sparrow.types import Vector3
 
 
 class TestScene(Scene):
+    spawn_cooldown = 30.0
+    last_box = spawn_cooldown
+
     def on_start(self):
         viewport = self.world.get_resource(RenderViewport)
         w, h = viewport.width, viewport.height
@@ -59,7 +62,7 @@ class TestScene(Scene):
             ),
             Transform(
                 pos=Vector3(0.0, 0.0, 0.0),
-                scale=Vector3(2.5, 2.5, 2.5),
+                scale=Vector3(40.0, 1.0, 40.0),
             ),
             Collider3D(size=Vector3(2.0, 0.0, 2.0)),
         )
@@ -85,13 +88,18 @@ class TestScene(Scene):
 
     def on_update(self, dt: float):
         super().on_update(dt)
+        self.last_box += 1
 
         inp = self.world.get_resource(InputHandler)
         if inp is None:
             return
 
-        if inp.is_pressed("SPACE"):
-            off_x, off_z = random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1)
+        if inp.is_pressed("SPACE") and self.last_box > self.spawn_cooldown:
+            self.last_box = 0.0
+
+            offset_amount = 0.9
+            off_x = random.uniform(-offset_amount, offset_amount)
+            off_z = random.uniform(-offset_amount, offset_amount)
             self.world.create_entity(
                 Mesh(
                     mesh_id=MeshId("engine.cube"),
@@ -101,7 +109,7 @@ class TestScene(Scene):
                     pos=Vector3(off_x, 10.0, off_z),
                     scale=Vector3(0.5, 0.5, 0.5),
                 ),
-                RigidBody(),
+                RigidBody(restitution=0.1, friction=0.9),
                 Collider3D(
                     center=Vector3(0.0, 0.0, 0.0),
                     size=Vector3(2.0, 2.0, 2.0),
@@ -116,7 +124,7 @@ class TestScene(Scene):
 
             radius = math.sqrt(pos.x**2 + pos.y**2 + pos.z**2)
             if radius < 0.01:
-                radius = 10.0
+                radius = 15.0
 
             yaw = math.atan2(pos.z, pos.x)
             pitch = math.asin(max(-1.0, min(1.0, pos.y / radius)))
