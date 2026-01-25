@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Mapping, Optional
 
 import moderngl
+import numpy as np
 
 from sparrow.graphics.ecs.frame_submit import LightPoint
 from sparrow.graphics.graph.pass_base import (
@@ -18,7 +19,6 @@ from sparrow.graphics.graph.pass_base import (
 from sparrow.graphics.graph.resources import (
     FramebufferResource,
     GraphResource,
-    TextureResource,
     expect_resource,
 )
 from sparrow.graphics.renderer.settings import ForwardRendererSettings
@@ -44,9 +44,12 @@ class ForwardPass(RenderPass):
     features: PassFeatures = PassFeatures.CAMERA
 
     _u_model: moderngl.Uniform | None = None
-    _u_base_color: moderngl.Uniform | None = None
     _u_light_color: moderngl.Uniform | None = None
     _u_light_pos: moderngl.Uniform | None = None
+
+    _u_mat_base_color: moderngl.Uniform | None = None
+    _u_mat_roughness: moderngl.Uniform | None = None
+    _u_mat_metallic: moderngl.Uniform | None = None
 
     @property
     def output_target(self) -> Optional[ResourceId]:
@@ -98,13 +101,20 @@ class ForwardPass(RenderPass):
             raise RuntimeError(
                 "ForwardPass requires a graphics Program, not a ComputeShader"
             )
-        if "u_model" not in prog:
-            raise RuntimeError("Missing uniform u_model")
-        self._u_model: moderngl.Uniform = prog["u_model"]
 
-        self._u_base_color: moderngl.Uniform = prog.get("u_base_color", None)
+        self._u_model: moderngl.Uniform = prog.get("u_model", None)
         self._u_light_color: moderngl.Uniform = prog.get("u_light_color", None)
         self._u_light_pos: moderngl.Uniform = prog.get("u_light_pos", None)
+
+        self._u_mat_base_color: moderngl.Uniform = prog.get(
+            "u_material.base_color", None
+        )
+        self._u_mat_roughness: moderngl.Uniform = prog.get(
+            "u_material.roughness", None
+        )
+        self._u_mat_metallic: moderngl.Uniform = prog.get(
+            "u_material.metallic", None
+        )
 
         self._program = prog
         super().on_graph_compiled(
@@ -134,7 +144,8 @@ class ForwardPass(RenderPass):
         assert isinstance(self._program, moderngl.Program)
         assert self._u_model
 
-        light_color = (1.0, 1.0, 1.0)
+        light_color = (0.0, 0.0, 0.0)
+        light_pos = (0.0, 0.0, 0.0)
         if exec_ctx.frame.point_lights:
             li: LightPoint = exec_ctx.frame.point_lights[0]
             light_color = (
@@ -147,9 +158,12 @@ class ForwardPass(RenderPass):
                 li.position_ws[1],
                 li.position_ws[2],
             )
+            light_intensity: float = li.intensity
 
         if self._u_light_color:
-            self._u_light_color.value = light_color
+            self._u_light_color.value = [
+                c * light_intensity for c in light_color
+            ]
 
         if self._u_light_pos:
             self._u_light_pos.value = light_pos
@@ -159,13 +173,18 @@ class ForwardPass(RenderPass):
             material_id = MaterialId(draw.material_id)
             material = services.material_manager.get(material_id)
 
-            self._u_model.write(draw.model.T.tobytes())
+            self._u_model.write(draw.model.astype(np.float32).T.tobytes())
 
-            if self._u_base_color is not None:
-                color = getattr(
-                    material, "base_color_factor", (1.0, 1.0, 1.0, 1.0)
+            if self._u_mat_base_color is not None:
+                color = getattr(material, "base_color", (1.0, 1.0, 1.0, 1.0))
+                self._u_mat_base_color.value = color
+            if self._u_mat_roughness:
+                self._u_mat_roughness.value = getattr(
+                    material, "roughness", 0.5
                 )
-                self._u_base_color.value = color
+
+            if self._u_mat_metallic:
+                self._u_mat_metallic.value = getattr(material, "metallic", 0.0)
 
             vao = services.mesh_manager.vao_for(mesh_id, self._program)
             vao.render()
@@ -173,4 +192,8 @@ class ForwardPass(RenderPass):
     def on_graph_destroyed(self) -> None:
         self._program = None
         self._u_model = None
-        self._u_base_color = None
+        self._u_light_color = None
+        self._u_light_pos = None
+        self._u_mat_base_color = None
+        self._u_mat_roughness = None
+        self._u_mat_metallic = None

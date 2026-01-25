@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Mapping, Optional
 
 import moderngl
+import numpy as np
 
 from sparrow.graphics.assets.material_manager import Material
 from sparrow.graphics.graph.pass_base import (
@@ -21,7 +22,13 @@ from sparrow.graphics.graph.resources import (
 )
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
-from sparrow.graphics.util.ids import MaterialId, MeshId, PassId, ResourceId, ShaderId
+from sparrow.graphics.util.ids import (
+    MaterialId,
+    MeshId,
+    PassId,
+    ResourceId,
+    ShaderId,
+)
 
 
 @dataclass(slots=True)
@@ -117,7 +124,9 @@ class ForwardUnlitPass(RenderPass):
                 )
                 if u is None
             ]
-            raise RuntimeError(f"ForwardPass missing required uniforms: {missing}")
+            raise RuntimeError(
+                f"ForwardPass missing required uniforms: {missing}"
+            )
 
         if self.color_target:
             self._fbo_rid = ResourceId(f"fbo:{self.pass_id}")
@@ -138,7 +147,12 @@ class ForwardUnlitPass(RenderPass):
 
         if self.output_target is None:
             gl.screen.use()
-            gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
+            gl.viewport = (
+                0,
+                0,
+                exec_ctx.viewport_width,
+                exec_ctx.viewport_height,
+            )
             gl.clear()
         else:
             assert self._fbo_rid
@@ -150,14 +164,21 @@ class ForwardUnlitPass(RenderPass):
             fbo = fbo_res.handle
             fbo.use()
 
-            gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
+            gl.viewport = (
+                0,
+                0,
+                exec_ctx.viewport_width,
+                exec_ctx.viewport_height,
+            )
             fbo.clear()
 
         gl.enable(moderngl.DEPTH_TEST)
         gl.disable(moderngl.BLEND)
 
         assert self._u_view_proj is not None
-        self._u_view_proj.write(frame.camera.view_proj.T.tobytes())
+        self._u_view_proj.write(
+            frame.camera.view_proj.astype(np.float32).T.tobytes()
+        )
 
         assert self._u_model is not None
         assert self._u_base_color is not None
@@ -168,8 +189,8 @@ class ForwardUnlitPass(RenderPass):
 
             mat: Material = services.material_manager.get(mat_id)
 
-            self._u_model.write(di.model.T.tobytes())
-            self._u_base_color.value = mat.base_color_factor
+            self._u_model.write(di.model.astype(np.float32).T.tobytes())
+            self._u_base_color.value = mat.base_color
 
             vao = services.mesh_manager.vao_for(mesh_id, self._program)
             vao.render(mode=moderngl.TRIANGLES)

@@ -47,17 +47,17 @@ class TestScene(Scene):
         renderer.material_manager.create(
             MaterialId("copper"),
             Material(
-                base_color_factor=(0.932, 0.623, 0.522, 1.0),
-                metalness=1.0,
-                roughness=0.0,
+                base_color=(0.932, 0.623, 0.522, 1.0),
+                metallic=0.5,
+                roughness=0.1,
             ),
         )
 
         renderer.material_manager.create(
             MaterialId("bone"),
             Material(
-                base_color_factor=(0.793, 0.793, 0.664, 1.0),
-                metalness=0.0,
+                base_color=(0.793, 0.793, 0.664, 1.0),
+                metallic=0.0,
                 roughness=0.9,
             ),
         )
@@ -99,7 +99,7 @@ class TestScene(Scene):
             Transform(pos=Vector3(0.0, 5.0, 5.0)),
             PointLight(
                 color=(0.25, 0.2, 0.2),
-                intensity=50.0,
+                intensity=500.0,
                 radius=20.0,
             ),
         )

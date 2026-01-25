@@ -22,10 +22,13 @@ class Material:
 
     base_color_tex: Optional[TextureId] = None
     normal_tex: Optional[TextureId] = None
-    orm_tex: Optional[TextureId] = None  # occlusion/roughness/metalness packed rgb
-    base_color_factor: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
-    roughness: float = 1.0
-    metalness: float = 0.0
+    orm_tex: Optional[TextureId] = (
+        None  # occlusion/roughness/metalness packed rgb
+    )
+
+    base_color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
+    roughness: float = 0.5
+    metallic: float = 0.0
 
 
 class MaterialManager:
@@ -36,7 +39,7 @@ class MaterialManager:
 
         self.create(
             MaterialId("engine.default"),
-            Material(base_color_factor=(1.0, 1.0, 1.0, 1.0)),
+            Material(base_color=(1.0, 1.0, 1.0, 1.0)),
         )
 
     def create(self, material_id: MaterialId, material: Material) -> None:

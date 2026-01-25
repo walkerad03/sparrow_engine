@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Mapping
 
 import moderngl
+import numpy as np
 
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
@@ -22,7 +23,13 @@ from sparrow.graphics.graph.resources import (
 from sparrow.graphics.renderer.settings import DeferredRendererSettings
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
-from sparrow.graphics.util.ids import MaterialId, MeshId, PassId, ResourceId, ShaderId
+from sparrow.graphics.util.ids import (
+    MaterialId,
+    MeshId,
+    PassId,
+    ResourceId,
+    ShaderId,
+)
 
 
 @dataclass(kw_only=True)
@@ -63,8 +70,12 @@ class GBufferPass(RenderPass):
             name="GBuffer",
             reads=[],
             writes=[
-                PassResourceUse(self.g_albedo, "write", stage="color", binding=0),
-                PassResourceUse(self.g_normal, "write", stage="color", binding=1),
+                PassResourceUse(
+                    self.g_albedo, "write", stage="color", binding=0
+                ),
+                PassResourceUse(
+                    self.g_normal, "write", stage="color", binding=1
+                ),
                 PassResourceUse(self.g_orm, "write", stage="color", binding=2),
                 PassResourceUse(self.g_depth, "write", stage="depth"),
             ],
@@ -100,7 +111,9 @@ class GBufferPass(RenderPass):
         self._u_metalness: moderngl.Uniform = prog.get("u_metalness", None)
 
         self._program = prog
-        super().on_graph_compiled(ctx=ctx, resources=resources, services=services)
+        super().on_graph_compiled(
+            ctx=ctx, resources=resources, services=services
+        )
 
     def execute(self, exec_ctx: PassExecutionContext) -> None:
         """Render draw list into the GBuffer framebuffer."""
@@ -131,7 +144,7 @@ class GBufferPass(RenderPass):
 
             material = services.material_manager.get(material_id)
 
-            self._u_model.write(draw.model.T.tobytes())
+            self._u_model.write(draw.model.astype(np.float32).T.tobytes())
 
             if self._u_base_color is not None and hasattr(
                 material, "base_color_factor"

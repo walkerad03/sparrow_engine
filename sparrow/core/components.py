@@ -16,11 +16,11 @@ def transform_to_matrix(
     rotation: Quaternion,
     scale: Vector3,
 ) -> np.ndarray:
-    T = np.eye(4, dtype=np.float32)
+    T = np.eye(4, dtype=np.float64)
     T[0:3, 3] = [position.x, position.y, position.z]
     R = rotation.to_matrix4()
 
-    S = np.eye(4, dtype=np.float32)
+    S = np.eye(4, dtype=np.float64)
     S[0, 0] = scale.x
     S[1, 1] = scale.y
     S[2, 2] = scale.z
@@ -42,7 +42,7 @@ class Transform:
     scale: Vector3 = Vector3(1.0, 1.0, 1.0)
 
     @property
-    def matrix_transform(self) -> NDArray[np.float32]:
+    def matrix_transform(self) -> NDArray[np.float64]:
         return transform_to_matrix(
             self.pos,
             self.rot,
@@ -135,14 +135,14 @@ class Camera:
     near_clip: float
     far_clip: float
 
-    target: NDArray[np.float32]
+    target: NDArray[np.float64]
 
     @property
     def aspect_ratio(self) -> float:
         return self.width / self.height
 
     @property
-    def projection_matrix(self) -> NDArray[np.float32]:
+    def projection_matrix(self) -> NDArray[np.float64]:
         """
         Calculates the infinite perspective projection matrix.
         Cached property logic could be added here if this becomes a bottleneck.
@@ -162,7 +162,7 @@ class Camera:
                 [0.0, 0.0, p22, p23],
                 [0.0, 0.0, -1.0, 0.0],
             ],
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
 

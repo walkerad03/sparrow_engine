@@ -11,10 +11,10 @@ import numpy as np
 class CameraData:
     """Camera matrices and parameters required for rendering."""
 
-    view: np.ndarray  # shape (4,4), float32
-    proj: np.ndarray  # shape (4,4), float32
-    view_proj: np.ndarray  # shape (4,4), float32
-    position_ws: np.ndarray  # shape (3,), float32
+    view: np.ndarray  # shape (4,4), float64
+    proj: np.ndarray  # shape (4,4), float64
+    view_proj: np.ndarray  # shape (4,4), float64
+    position_ws: np.ndarray  # shape (3,), float64
     near: float
     far: float
 

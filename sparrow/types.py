@@ -60,7 +60,9 @@ class Vector2:
         if isinstance(index, slice):
             return tuple(self)[index]
 
-        raise TypeError(f"indices must be int or slice, not {type(index).__name__}")
+        raise TypeError(
+            f"indices must be int or slice, not {type(index).__name__}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +122,9 @@ class Vector3:
         if isinstance(index, slice):
             return tuple(self)[index]
 
-        raise TypeError(f"indices must be int or slice, not {type(index).__name__}")
+        raise TypeError(
+            f"indices must be int or slice, not {type(index).__name__}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,7 +168,10 @@ class Quaternion:
 
     def normalized(self) -> Quaternion:
         n = (
-            self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
+            self.x * self.x
+            + self.y * self.y
+            + self.z * self.z
+            + self.w * self.w
         ) ** 0.5
         if n == 0.0:
             return Quaternion(0.0, 0.0, 0.0, 1.0)
@@ -205,5 +212,5 @@ class Quaternion:
                 [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy), 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ],
-            dtype=np.float32,
+            dtype=np.float64,
         )
