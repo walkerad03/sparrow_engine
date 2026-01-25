@@ -22,8 +22,10 @@ def load_obj(path: str) -> MeshData:
     positions: List[Tuple[float, float, float]] = []
     normals: List[Tuple[float, float, float]] = []
     uvs: List[Tuple[float, float]] = []
-
     vertices: List[bytes] = []
+
+    min_x = min_y = min_z = float("inf")
+    max_x = max_y = max_z = float("-inf")
 
     with open(path, "r") as f:
         for line in f:
@@ -37,6 +39,19 @@ def load_obj(path: str) -> MeshData:
             if tag == "v":
                 px, py, pz = map(float, parts[1:4])
                 positions.append((px, py, pz))
+
+                if px < min_x:
+                    min_x = px
+                if px > max_x:
+                    max_x = px
+                if py < min_y:
+                    min_y = py
+                if py > max_y:
+                    max_y = py
+                if pz < min_z:
+                    min_z = pz
+                if pz > max_z:
+                    max_z = pz
 
             elif tag == "vn":
                 nx, ny, nz = map(float, parts[1:4])
@@ -52,12 +67,12 @@ def load_obj(path: str) -> MeshData:
 
                 for vert in parts[1:4]:
                     v_idx, vt_idx, vn_idx = _parse_face_vertex(vert)
-
                     px, py, pz = positions[v_idx]
+
                     nx, ny, nz = (
                         normals[vn_idx]
                         if vn_idx is not None
-                        else (0.0, 0.0, 1.0)
+                        else (0.0, 1.0, 0.0)
                     )
                     u, v = uvs[vt_idx] if vt_idx is not None else (0.0, 0.0)
 
@@ -81,6 +96,7 @@ def load_obj(path: str) -> MeshData:
             vertices=vertex_blob,
             indices=None,
             vertex_layout=layout,
+            aabb=((min_x, min_y, min_z), (max_x, max_y, max_z)),
         )
 
 

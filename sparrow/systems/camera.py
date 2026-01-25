@@ -51,7 +51,7 @@ def camera_system(world: World) -> None:
                 [-fx, -fy, -fz, trans_f],
                 [0.0, 0.0, 0.0, 1.0],
             ],
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
         aspect = camera.aspect_ratio
@@ -72,7 +72,7 @@ def camera_system(world: World) -> None:
                 [0.0, 0.0, p22, p23],
                 [0.0, 0.0, -1.0, 0.0],
             ],
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
         view_proj = np.array(
@@ -82,7 +82,7 @@ def camera_system(world: World) -> None:
                 [p22 * -fx, p22 * -fy, p22 * -fz, p22 * trans_f + p23],
                 [fx, fy, fz, -trans_f],
             ],
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
         new_cam_out = replace(

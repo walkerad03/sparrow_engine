@@ -21,16 +21,25 @@ from sparrow.graphics.renderer.settings import (
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
 from sparrow.resources.cameras import CameraOutput
+from sparrow.resources.physics import Gravity
 from sparrow.resources.rendering import (
     RenderContext,
     RendererSettingsResource,
     RenderFrame,
     RenderViewport,
 )
+from sparrow.systems.camera import camera_system
+from sparrow.systems.physics import physics_system
 from sparrow.systems.rendering import ensure_renderer_resource, render_system
+from sparrow.types import SystemId
 
 if TYPE_CHECKING:
     from sparrow.core.application import Application
+
+
+class SystemNames:
+    CAMERA = SystemId("camera")
+    PHYSICS = SystemId("physics")
 
 
 class Scene:
@@ -66,7 +75,15 @@ class Scene:
 
         self.world.add_resource(CameraOutput())
 
-    def _register_default_systems(self): ...
+        self.world.add_resource(Gravity())
+
+    def _register_default_systems(self):
+        self.scheduler.add_system(
+            Stage.POST_UPDATE, camera_system, name=SystemNames.CAMERA
+        )
+        self.scheduler.add_system(
+            Stage.PHYSICS, physics_system, name=SystemNames.PHYSICS
+        )
 
     def on_start(self) -> None:
         """Called when the scene is first activated."""

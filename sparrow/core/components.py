@@ -50,16 +50,31 @@ class Transform:
         )
 
 
-@dataclass(frozen=True)
-class Velocity:
-    """
-    Rate of change for the Transform.
-    Used by the Physics/Movement System.
-    """
+# Physics
 
-    x: float = 0.0
-    y: float = 0.0
-    damping: float = 0.9  # Friction (0.0 = stops instantly, 1.0 = no friction)
+
+# TODO: 3x3 matrix to determine rotation difficulty
+@dataclass(frozen=True)
+class RigidBody:
+    mass: float = 1.0
+    velocity: Vector3 = Vector3(0.0, 0.0, 0.0)
+
+    inverse_mass: float = 1.0  # 0.0 for infinite mass static objects
+
+    restitution: float = 0.5
+    friction: float = 0.5
+
+    drag: float = 0.0
+
+
+@dataclass(frozen=True)
+class Collider3D:
+    center: Vector3 = Vector3(0.0, 0.0, 0.0)
+    size: Vector3 = Vector3(1.0, 1.0, 1.0)
+
+    @property
+    def half_size(self) -> Vector3:
+        return self.size * 0.5
 
 
 # --- GRAPHICS COMPONENTS ---
@@ -124,7 +139,7 @@ class ChildOf:
     """
 
     parent: EntityId
-    offset: Vector2 = Vector2(0.0, 0.0)
+    offset: Vector3 = Vector3(0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)

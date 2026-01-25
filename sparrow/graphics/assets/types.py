@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,4 +21,5 @@ class MeshData:
     vertices: bytes
     indices: Optional[bytes]
     vertex_layout: VertexLayout
+    aabb: Tuple[Tuple[float, float, float], Tuple[float, float, float]]
     index_element_size: int = 4  # bytes (2 or 4)

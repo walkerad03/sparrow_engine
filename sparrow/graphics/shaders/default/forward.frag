@@ -57,39 +57,59 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// void main() {
+//     vec3 N = normalize(v_normal);
+//     vec3 V = normalize(u_camera_pos - v_frag_pos);
+
+//     vec3 F0 = vec3(0.04);
+//     F0 = mix(F0, u_material.albedo, u_material.metallic);
+
+//     vec3 L = normalize(u_light_pos - v_frag_pos);
+//     vec3 H = normalize(V + L);
+
+//     float distance = length(u_light_pos - v_frag_pos);
+//     float attenuation = 1.0 / (distance * distance);
+//     vec3 radiance = u_light_color * attenuation;
+
+//     float NDF = DistributionGXX(N, H, u_material.roughness);
+//     float G = GeometrySmith(N, V, L, u_material.roughness);
+//     vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+//     vec3 numerator = NDF * G * F;
+//     float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+//     vec3 specular = numerator / denominator;
+
+//     vec3 kS = F;
+//     vec3 kD = vec3(1.0) - kS;
+//     kD *= 1.0 - u_material.metallic;
+
+//     float NdotL = max(dot(N, L), 0.0);
+
+//     vec3 Lo = (kD * u_material.albedo / PI + specular) * radiance * NdotL;
+
+//     vec3 ambient = vec3(0.03) * u_material.albedo;
+
+//     vec3 color = ambient + Lo;
+
+//     fragColor = vec4(color, 1.0);
+// }
+
 void main() {
     vec3 N = normalize(v_normal);
-    vec3 V = normalize(u_camera_pos - v_frag_pos);
-
-    vec3 F0 = vec3(0.04);
-    F0 = mix(F0, u_material.albedo, u_material.metallic);
-
     vec3 L = normalize(u_light_pos - v_frag_pos);
-    vec3 H = normalize(V + L);
 
-    float distance = length(u_light_pos - v_frag_pos);
-    float attenuation = 1.0 / (distance * distance);
-    vec3 radiance = u_light_color * attenuation;
+    float numColorSteps = 4.0;
 
-    float NDF = DistributionGXX(N, H, u_material.roughness);
-    float G = GeometrySmith(N, V, L, u_material.roughness);
-    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+    float diffuse = max(dot(N, L), 0.0);
 
-    vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-    vec3 specular = numerator / denominator;
+    float diffuseToon = max(ceil(diffuse * numColorSteps) / numColorSteps, 0.0);
 
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - u_material.metallic;
+    vec3 ambient = vec3(0.1) * u_material.albedo;
 
-    float NdotL = max(dot(N, L), 0.0);
+    vec3 lightColor = u_light_color;
+    vec3 objectColor = u_material.albedo;
 
-    vec3 Lo = (kD * u_material.albedo / PI + specular) * radiance * NdotL;
-
-    vec3 ambient = vec3(0.03) * u_material.albedo;
-
-    vec3 color = ambient + Lo;
+    vec3 color = ambient + (diffuseToon * lightColor * objectColor);
 
     fragColor = vec4(color, 1.0);
 }

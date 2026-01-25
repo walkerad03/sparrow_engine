@@ -65,9 +65,9 @@ class MeshManager:
         )
         """
         self.create(
-            MeshId("engine.large_plane"),
-            load_obj("sparrow/graphics/assets/defaults/meshes/large_plane.obj"),
-            label="Large Plane",
+            MeshId("engine.plane"),
+            load_obj("sparrow/graphics/assets/defaults/meshes/plane.obj"),
+            label="Plane",
         )
         """
         self.create(
