@@ -65,6 +65,7 @@ class TestScene(Scene):
                 scale=Vector3(40.0, 1.0, 40.0),
             ),
             Collider3D(size=Vector3(2.0, 0.0, 2.0)),
+            RigidBody(inverse_mass=0.0, mass=0.0),
         )
 
         MeshManager

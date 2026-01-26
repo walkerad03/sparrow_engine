@@ -1,3 +1,4 @@
+# sparrow/systems/camera.py
 import math
 from dataclasses import replace
 

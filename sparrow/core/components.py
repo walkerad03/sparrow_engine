@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -37,6 +37,12 @@ class Transform:
     The physical location of an entity in the world.
     """
 
+    __soa_dtype__ = [
+        ("pos", "f4", (3,)),
+        ("rot", "f4", (4,)),
+        ("scale", "f4", (3,)),
+    ]
+
     pos: Vector3 = Vector3(0.0, 0.0, 0.0)
     rot: Quaternion = Quaternion.identity()
     scale: Vector3 = Vector3(1.0, 1.0, 1.0)
@@ -51,11 +57,20 @@ class Transform:
 
 
 # Physics
-
-
-# TODO: 3x3 matrix to determine rotation difficulty
 @dataclass(frozen=True)
 class RigidBody:
+    __soa_dtype__ = [
+        ("mass", "f4", (1,)),
+        ("velocity", "f4", (3,)),
+        ("inverse_mass", "f4", (1,)),
+        ("angular_velocity", "f4", (3,)),
+        ("inverse_inertia", "f4", (3,)),
+        ("angular_drag", "f4", (1,)),
+        ("restitution", "f4", (1,)),
+        ("friction", "f4", (1,)),
+        ("drag", "f4", (1,)),
+    ]
+
     mass: float = 1.0
     velocity: Vector3 = field(default_factory=Vector3.zero)
     inverse_mass: float = 1.0  # 0.0 for infinite mass static objects
@@ -74,6 +89,11 @@ class RigidBody:
 
 @dataclass(frozen=True)
 class Collider3D:
+    __soa_dtype__ = [
+        ("center", "f4", (3,)),
+        ("size", "f4", (3,)),
+    ]
+
     center: Vector3 = Vector3(0.0, 0.0, 0.0)
     size: Vector3 = Vector3(1.0, 1.0, 1.0)
 
@@ -90,6 +110,15 @@ class Sprite:
     """
     Visual representation for the Deferred Renderer.
     """
+
+    __soa_dtype__ = [
+        ("texture_id", "O"),
+        ("normal_map_id", "O"),
+        ("layer", "i4", (1,)),
+        ("color", "f4", (4,)),
+        ("region", "O"),
+        ("pivot", "f4", (2,)),
+    ]
 
     texture_id: str  # Key for the Texture Atlas
     normal_map_id: Optional[str] = None
@@ -111,6 +140,8 @@ class CameraTarget:
     The Camera System will smooth-follow the average position of all entities with this tag.
     """
 
+    __soa_dtype__ = [("weight", "f4", (1,))]
+
     weight: float = 1.0  # How much this entity pulls the camera
 
 
@@ -122,6 +153,13 @@ class BoxCollider:
     """
     Axis-Aligned Bounding Box (AABB) for physics.
     """
+
+    __soa_dtype__ = [
+        ("width", "f4", (1,)),
+        ("height", "f4", (1,)),
+        ("offset", "f4", (2,)),
+        ("is_trigger", "?", (1,)),  # Boolean
+    ]
 
     width: float
     height: float
@@ -143,12 +181,26 @@ class ChildOf:
     The HierarchySystem will snap this entity's position to the parent's.
     """
 
+    __soa_dtype__ = [
+        ("parent", "i4", (1,)),  # EntityId is an integer
+        ("offset", "f4", (3,)),
+    ]
+
     parent: EntityId
     offset: Vector3 = Vector3(0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
 class Camera:
+    __soa_dtype__ = [
+        ("fov", "f4", (1,)),
+        ("width", "i4", (1,)),
+        ("height", "i4", (1,)),
+        ("near_clip", "f4", (1,)),
+        ("far_clip", "f4", (1,)),
+        ("target", "O"),  # Storing the NDArray as an object reference
+    ]
+
     fov: float
     width: int
     height: int
@@ -188,20 +240,23 @@ class Camera:
 
 @dataclass
 class Mesh:
+    __soa_dtype__ = [
+        ("mesh_id", "O"),
+        ("material_id", "O"),
+    ]
+
     mesh_id: MeshId
     material_id: MaterialId
 
 
 @dataclass
-class RenderSettings:
-    pipeline: Literal["deferred", "forward"] = "deferred"
-    enable_bloom: bool = True
-    enable_ssao: bool = False
-    enable_chromatic: bool = False
-
-
-@dataclass
 class PointLight:
+    __soa_dtype__ = [
+        ("color", "f4", (3,)),
+        ("intensity", "f4", (1,)),
+        ("radius", "f4", (1,)),
+    ]
+
     color: tuple[float, float, float] = (1.0, 1.0, 1.0)
     intensity: float = 1.0
     radius: float = 10.0

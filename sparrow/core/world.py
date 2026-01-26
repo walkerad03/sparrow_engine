@@ -13,23 +13,18 @@ from typing import (
     Unpack,
 )
 
+import numpy as np
+
 from sparrow.core.archetype import Archetype
-from sparrow.core.component import Component
 from sparrow.core.events import EventManager
 from sparrow.core.registry import ComponentRegistry
 from sparrow.core.resources import ResourceManager
-from sparrow.types import ArchetypeMask, EntityId
+from sparrow.types import ArchetypeMask, EntityId, Quaternion, Vector2, Vector3
 
 T = TypeVar("T")
 Ev = TypeVar("Ev")
 Ts = TypeVarTuple("Ts")
 Cs = TypeVarTuple("Cs")  # variadic component types for join()
-
-A = TypeVar("A", bound=Component)
-B = TypeVar("B", bound=Component)
-C = TypeVar("C", bound=Component)
-D = TypeVar("D", bound=Component)
-E = TypeVar("E", bound=Component)
 
 
 class EntityRecord:
@@ -57,19 +52,19 @@ class World:
 
     # RESOURCE MANAGEMENT
     def add_resource(self, resource: Any) -> None:
-        """Registers a global resource (e.g. Time, Input, Config)."""
+        """Register a global resource (e.g. Time, Input, Config)."""
         self._resource_manager.add(resource)
 
     def get_resource(self, resource_type: Type[T]) -> T:
-        """Retrieves a resource. Raises KeyError if missing."""
+        """Retrieve a resource. Raises KeyError if missing."""
         return self._resource_manager.get(resource_type)
 
     def try_resource(self, resource_type: Type[T]) -> T | None:
-        """Retrieves a resource or returns None."""
+        """Retrieve a resource or returns None."""
         return self._resource_manager.try_get(resource_type)
 
     def mutate_resource(self, resource_type: Any) -> None:
-        """Updates an EXISTING resource with a new instance."""
+        """Update an EXISTING resource with a new instance."""
         res_type = type(resource_type)
 
         if self._resource_manager.try_get(res_type) is None:
@@ -138,7 +133,6 @@ class World:
         del self._entities[eid]
 
     # COMPONENT MANAGEMENT
-
     def add_component(self, eid: EntityId, component: object) -> None:
         record = self._entities[eid]
         old_arch = record.archetype
@@ -146,13 +140,15 @@ class World:
         comp_mask = ComponentRegistry.get_mask(comp_type)
 
         if old_arch.mask & comp_mask:
-            old_arch.components[comp_type][record.row] = component
+            self.mutate_component(eid, component)
             return
 
         new_mask = ArchetypeMask(old_arch.mask | comp_mask)
         self._move_entity(eid, record, new_mask, add_component=component)
 
-    def remove_component(self, eid: EntityId, component_type: Type[Any]) -> None:
+    def remove_component(
+        self, eid: EntityId, component_type: Type[Any]
+    ) -> None:
         record = self._entities.get(eid)
         if not record:
             return
@@ -170,34 +166,54 @@ class World:
 
     def mutate_component(self, eid: EntityId, component: Any) -> None:
         """
-        Updates an EXISTING component with a new instance.
+        Update an EXISTING component with a new instance.
         """
         record = self._entities.get(eid)
         if not record:
             raise KeyError(f"Entity {eid} does not exist.")
 
         comp_type = type(component)
+        arch = record.archetype
 
-        column = record.archetype.components.get(comp_type)
+        if comp_type in arch.arrays:
+            field_values = []
+            for field_def in comp_type.__soa_dtype__:
+                field_name = field_def[0]
+                val = getattr(component, field_name)
 
-        if column is None:
+                if hasattr(val, "__iter__") and not isinstance(
+                    val, (str, bytes, list, tuple, np.ndarray)
+                ):
+                    val = tuple(val)
+                field_values.append(val)
+
+            arch.arrays[comp_type][record.row] = tuple(field_values)
+
+        elif comp_type in arch.objects:
+            arch.objects[comp_type][record.row] = component
+
+        else:
             raise KeyError(
                 f"Entity {eid} cannot mutate {comp_type.__name__}: Component missing. "
                 "Use world.add() to attach new components."
             )
-
-        column[record.row] = component
 
     def component(self, eid: EntityId, component_type: Type[T]) -> Optional[T]:
         record = self._entities.get(eid)
         if not record:
             return None
 
-        store = record.archetype.components.get(component_type)
-        if store is None:
-            return None
+        arch = record.archetype
+        row = record.row
 
-        return store[record.row]
+        if component_type in arch.arrays:
+            raw_data = arch.arrays[component_type][row]
+            return self._reconstruct_component(component_type, raw_data)
+
+        if component_type in arch.objects:
+            return arch.objects[component_type][row]
+
+        return None
 
     def has(self, eid: EntityId, component_type: Type[Any]) -> bool:
         record = self._entities.get(eid)
@@ -207,24 +223,13 @@ class World:
         return bool(record.archetype.mask & mask)
 
     # QUERIES
-
     def join(
         self,
         *component_types: Unpack[Tuple[Type[Cs], ...]],
     ) -> Iterator[Tuple[EntityId, *Cs]]:
-        """Query entities that have *all* of the supplied component types.
-
-        Args:
-            *component_types: One or more component classes to filter on.
-                The classes do **not** need to inherit from ``Component`` –
-                they only need to be registered with ``ComponentRegistry``.
-
-        Yields:
-            A tuple where the first element is the ``EntityId`` followed by
-            the component instances in the same order as ``component_types``.
-
-        The function builds a bit-mask from the supplied types, iterates over
-        all archetypes, and yields matching rows using column‑arithmetic.
+        """
+        Legacy Query.
+        Slower than get_batch() because it reconstructs objects from arrays.
         """
         query_mask = 0
         for t in component_types:
@@ -232,9 +237,44 @@ class World:
 
         for arch in self._archetypes.values():
             if (arch.mask & query_mask) == query_mask:
-                columns = [arch.components[t] for t in component_types]
+                # Iterate rows
                 for i, eid in enumerate(arch.entities):
-                    yield (eid, *[col[i] for col in columns])
+                    components = []
+                    for t in component_types:
+                        if t in arch.arrays:
+                            # Reconstruct from SoA
+                            raw = arch.arrays[t][i]
+                            comp = self._reconstruct_component(t, raw)
+                            components.append(comp)
+                        else:
+                            # Get from AoS
+                            components.append(arch.objects[t][i])
+
+                    yield (eid, *components)
+
+    def get_batch(
+        self,
+        *component_types: Unpack[Tuple[Type[Cs], ...]],
+    ) -> Iterator[Tuple[EntityId, *Cs]]:
+        """
+        High-performance query. Yields SoA arrays directly.
+        Returns: (count, [Array_Comp1, Array_Comp2, ...])
+        """
+        query_mask = 0
+        for t in component_types:
+            query_mask |= ComponentRegistry.get_mask(t)
+
+        for arch in self._archetypes.values():
+            if (arch.mask & query_mask) == query_mask:
+                if arch.count > 0:
+                    arrays = []
+                    for t in component_types:
+                        if t in arch.arrays:
+                            arrays.append(arch.arrays[t][: arch.count])
+                        else:
+                            arrays.append(arch.objects[t][: arch.count])
+
+                    yield (arch.count, arrays)
 
     # INTERNAL HELPERS
 
@@ -253,14 +293,18 @@ class World:
         add_component: Any = None,
         remove_type: Type[Any] | None = None,
     ) -> None:
-        """Handles the complex logic of moving an entity between tables"""
+        """Handles the logic of moving an entity between tables"""
         old_arch = record.archetype
 
         # 1. Collect data for the new archetype
         data = {}
         for t in old_arch.types:
             if t != remove_type:
-                data[t] = old_arch.components[t][record.row]
+                if t in old_arch.arrays:
+                    raw = old_arch.arrays[t][record.row]
+                    data[t] = self._reconstruct_component(t, raw)
+                else:
+                    data[t] = old_arch.objects[t][record.row]
 
         if add_component:
             data[type(add_component)] = add_component
@@ -277,3 +321,36 @@ class World:
         # 4. Add to new
         new_row = new_arch.add(eid, data)
         self._entities[eid] = EntityRecord(new_arch, new_row)
+
+    def _reconstruct_component(self, comp_type: Type[T], raw_data: Any) -> T:
+        """
+        Re-inflates a Dataclass component from a Numpy void record.
+        """
+        kwargs = {}
+        # Iterate the dtypes to know which fields to extract
+        for field_def in comp_type.__soa_dtype__:
+            name = field_def[0]
+            val = raw_data[name]
+            shape = field_def[2] if len(field_def) > 2 else ()
+
+            # Simple heuristic to reconstruct Vector types
+            # (Requires Vector3/Quaternion to accept unpacked args in __init__)
+            if len(shape) > 0:
+                if shape == (3,) and (
+                    "pos" in name
+                    or "vel" in name
+                    or "scale" in name
+                    or "size" in name
+                    or "center" in name
+                ):
+                    val = Vector3(*val)
+                elif shape == (4,) and "rot" in name:
+                    val = Quaternion(*val)
+                elif shape == (2,):
+                    val = Vector2(*val)
+                elif shape == (1,):
+                    val = val[0]
+
+            kwargs[name] = val
+
+        return comp_type(**kwargs)

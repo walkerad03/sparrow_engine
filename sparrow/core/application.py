@@ -11,7 +11,9 @@ from sparrow.resources.rendering import RenderContext, RenderViewport
 
 
 class Application:
-    def __init__(self, width: int = 1280, height: int = 720, title: str = "Sparrow"):
+    def __init__(
+        self, width: int = 1920, height: int = 1080, title: str = "Sparrow"
+    ):
         self.screen_size = (width, height)
         self.window: pygame.Surface | None = None
         self.ctx: moderngl.Context | None = None
@@ -36,7 +38,8 @@ class Application:
         pygame.display.gl_set_attribute(pygame.GL_DEPTH_SIZE, 24)
 
         self.window = pygame.display.set_mode(
-            self.screen_size, pygame.OPENGL | pygame.DOUBLEBUF | pygame.RESIZABLE
+            self.screen_size,
+            pygame.OPENGL | pygame.DOUBLEBUF | pygame.RESIZABLE,
         )
         pygame.display.set_caption(self._title)
 
@@ -92,7 +95,9 @@ class Application:
             self._ensure_window()
             assert self.ctx is not None
             w, h = self.screen_size
-            self.active_scene.world.add_resource(RenderViewport(width=w, height=h))
+            self.active_scene.world.add_resource(
+                RenderViewport(width=w, height=h)
+            )
             self.active_scene.world.add_resource(RenderContext(gl=self.ctx))
             self.active_scene.configure_rendering()
         self.active_scene.on_start()
