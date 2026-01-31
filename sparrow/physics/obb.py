@@ -154,7 +154,9 @@ def get_obb_manifold(
     if collision_normal is None:
         return None
 
-    contact_point = get_support_point(t1, c1, -collision_normal)
+    pA = get_support_point(t1, c1, -collision_normal)
+    pB = get_support_point(t2, c2, collision_normal)
+    contact_point = (pA + pB) * 0.5
 
     normal_v = Vector3(
         collision_normal[0], collision_normal[1], collision_normal[2]

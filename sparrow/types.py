@@ -1,3 +1,4 @@
+# sparrow/types.py
 from __future__ import annotations
 
 import math
@@ -16,19 +17,19 @@ InputAction = str
 
 Address = Tuple[str, int]
 
-Number: TypeAlias = float
+Scalar: TypeAlias = float
 
 
 @dataclass(frozen=True, slots=True)
 class Vector2:
-    x: Number
-    y: Number
+    x: Scalar
+    y: Scalar
 
     @staticmethod
     def zero() -> Vector2:
         return Vector2(0.0, 0.0)
 
-    def __iter__(self) -> Iterator[Number]:
+    def __iter__(self) -> Iterator[Scalar]:
         yield self.x
         yield self.y
 
@@ -45,9 +46,29 @@ class Vector2:
         return Vector2(self.x * scalar, self.y * scalar)
 
     @overload
-    def __getitem__(self, index: int) -> Number: ...
+    def __truediv__(self, other: float) -> Vector2: ...
     @overload
-    def __getitem__(self, index: slice) -> tuple[Number, ...]: ...
+    def __truediv__(self, other: Vector2) -> Vector2: ...
+
+    def __truediv__(self, other: Any):
+        if isinstance(other, float):
+            if other == 0.0:
+                raise ValueError(other)
+            return Vector2(self.x / other, self.y / other)
+
+        if isinstance(other, Vector2):
+            if other.x == 0 or other.y == 0:
+                raise ValueError(other)
+            return Vector2(self.x / other.x, self.y / other.y)
+
+        raise TypeError(
+            f"other must be Vector2 or Scalar, not {type(other).__name__}"
+        )
+
+    @overload
+    def __getitem__(self, index: int) -> Scalar: ...
+    @overload
+    def __getitem__(self, index: slice) -> tuple[Scalar, ...]: ...
 
     def __getitem__(self, index: Any):
         if isinstance(index, int):
@@ -67,15 +88,15 @@ class Vector2:
 
 @dataclass(frozen=True, slots=True)
 class Vector3:
-    x: Number
-    y: Number
-    z: Number
+    x: Scalar
+    y: Scalar
+    z: Scalar
 
     @staticmethod
     def zero() -> Vector3:
         return Vector3(0.0, 0.0, 0.0)
 
-    def __iter__(self) -> Iterator[Number]:
+    def __iter__(self) -> Iterator[Scalar]:
         yield self.x
         yield self.y
         yield self.z
@@ -105,9 +126,29 @@ class Vector3:
         )
 
     @overload
-    def __getitem__(self, index: int) -> Number: ...
+    def __truediv__(self, other: float) -> Vector3: ...
     @overload
-    def __getitem__(self, index: slice) -> tuple[Number, ...]: ...
+    def __truediv__(self, other: Vector3) -> Vector3: ...
+
+    def __truediv__(self, other: Any):
+        if isinstance(other, float):
+            if other == 0.0:
+                raise ValueError(other)
+            return Vector3(self.x / other, self.y / other, self.z / other)
+
+        if isinstance(other, Vector3):
+            if other.x == 0 or other.y == 0:
+                raise ValueError(other)
+            return Vector3(self.x / other.x, self.y / other.y, self.z / other.z)
+
+        raise TypeError(
+            f"other must be Vector3 or Scalar, not {type(other).__name__}"
+        )
+
+    @overload
+    def __getitem__(self, index: int) -> Scalar: ...
+    @overload
+    def __getitem__(self, index: slice) -> tuple[Scalar, ...]: ...
 
     def __getitem__(self, index: Any):
         if isinstance(index, int):
@@ -129,12 +170,12 @@ class Vector3:
 
 @dataclass(frozen=True, slots=True)
 class Quaternion:
-    x: Number
-    y: Number
-    z: Number
-    w: Number
+    x: Scalar
+    y: Scalar
+    z: Scalar
+    w: Scalar
 
-    def __iter__(self) -> Iterator[Number]:
+    def __iter__(self) -> Iterator[Scalar]:
         yield self.x
         yield self.y
         yield self.z
@@ -214,3 +255,43 @@ class Quaternion:
             ],
             dtype=np.float64,
         )
+
+
+@dataclass
+class Rectangle:
+    x: Scalar
+    y: Scalar
+    width: Scalar
+    height: Scalar
+
+
+@dataclass
+class BoundingBox3D:
+    min: Vector3
+    max: Vector3
+
+
+@dataclass
+class BoundingBox2D:
+    min: Vector2
+    max: Vector2
+
+
+@dataclass
+class Ray3D:
+    position: Vector3
+    direction: Vector3
+
+
+@dataclass
+class Ray2D:
+    position: Vector2
+    direction: Vector2
+
+
+@dataclass
+class RayCollision2D:
+    hit: bool
+    distance: float
+    point: Vector2
+    normal: Vector2

@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -57,18 +59,18 @@ def physics_system(world: World) -> None:
         x1, y1, z1, w1 = q_w[:, 0], q_w[:, 1], q_w[:, 2], q_w[:, 3]
         x2, y2, z2, w2 = rots[:, 0], rots[:, 1], rots[:, 2], rots[:, 3]
 
-        new_x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-        new_y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-        new_z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-        new_w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        new_x = w2 * x1 + x2 * w1 + y2 * z1 - z2 * y1
+        new_y = w2 * y1 - x2 * z1 + y2 * w1 + z2 * x1
+        new_z = w2 * z1 + x2 * y1 - y2 * x1 + z2 * w1
+        new_w = w2 * w1 - x2 * x1 - y2 * y1 - z2 * z1
 
         rots[:, 0] += new_x
         rots[:, 1] += new_y
         rots[:, 2] += new_z
         rots[:, 3] += new_w
 
-        norm = np.sqrt(np.sum(rots**2, axis=1, keepdims=True))
-        rots /= norm
+        norm = np.linalg.norm(rots, axis=1, keepdims=True)
+        rots /= np.maximum(norm, 1e-12)
 
         bodies["velocity"][active] = vels
         transforms["pos"][active] = pos
@@ -188,6 +190,16 @@ def _view_collider(c_array: NDArray, idx: int) -> Collider3D:
     )
 
 
+def _view_collider_center_world(
+    trans: NDArray, idx: int
+) -> Tuple[float, float, float]:
+    p = trans["pos"][idx]
+    r = trans["rot"][idx]
+    s = trans["scale"][idx]
+
+    return (p[0], p[1], [p2])
+
+
 def _resolve_collision_soa(
     bodies_a: NDArray,
     trans_a: NDArray,
@@ -222,16 +234,15 @@ def _resolve_collision_soa(
     if total_inv_mass == 0.0:
         return
 
-    pos_a_old = Vector3(*trans_a["pos"][idx_a])
+    ca = Vector3(*_view_collider_center_world(trans_a, idx_a))
+    cb = Vector3(*_view_collider_center_world(trans_b, idx_b))
 
-    pos_b_old = Vector3(*trans_b["pos"][idx_b])
+    pos_a_old = ca
+    pos_b_old = cb
 
     rot_a_arr = trans_a["rot"][idx_a]
-
     rot_a = Quaternion(rot_a_arr[0], rot_a_arr[1], rot_a_arr[2], rot_a_arr[3])
-
     rot_b_arr = trans_b["rot"][idx_b]
-
     rot_b = Quaternion(rot_b_arr[0], rot_b_arr[1], rot_b_arr[2], rot_b_arr[3])
 
     # --- 1. Positional Correction ---
