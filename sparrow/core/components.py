@@ -223,6 +223,27 @@ class Lifetime:
 
 
 @dataclass(frozen=True)
+class Camera2D:
+    __soa_dtype__ = [
+        ("zoom", "f4", (1,)),  # Vertical world units visible (Ortho Scale)
+        ("width", "i4", (1,)),
+        ("height", "i4", (1,)),
+        ("near_clip", "f4", (1,)),
+        ("far_clip", "f4", (1,)),
+    ]
+
+    zoom: float = 10.0
+    width: int = 1920
+    height: int = 1080
+    near_clip: float = -100.0
+    far_clip: float = 100.0
+
+    @property
+    def aspect_ratio(self) -> float:
+        return self.width / self.height
+
+
+@dataclass(frozen=True)
 class Camera:
     __soa_dtype__ = [
         ("fov", "f4", (1,)),

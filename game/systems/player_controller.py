@@ -1,26 +1,48 @@
 import math
 from dataclasses import replace
 
+import numpy as np
+
 from game.components.player import Player
 from game.factories.game_object import create_bullet, create_spaceship_trail
 from sparrow.core.components import Transform, Velocity
 from sparrow.core.world import World
 from sparrow.input.handler import InputHandler
 from sparrow.math import magnitude_vec, norm_vec, rotate_vec2
+from sparrow.resources.cameras import CameraOutput
 from sparrow.resources.core import SimulationTime
-from sparrow.resources.rendering import RenderViewport
 from sparrow.types import Quaternion, Vector2
 
 
 def player_controller_system(world: World) -> None:
     inp = world.try_resource(InputHandler)
     sim_time = world.try_resource(SimulationTime)
-    viewport = world.try_resource(RenderViewport)
+    cam = world.try_resource(CameraOutput)
 
-    if not (inp and sim_time and viewport):
+    if not (inp and sim_time and cam):
         return
 
     dt = sim_time.delta_seconds
+    cam_data = cam.active
+
+    if not cam_data:
+        return
+
+    mx, my = inp.get_mouse_position()
+
+    ndc_x = (mx * 2.0) - 1.0
+    ndc_y = (my * 2.0) - 1.0
+
+    ndc_vec = np.array([ndc_x, ndc_y, 0.0, 1.0], dtype=np.float64)
+
+    inv_view_proj = np.linalg.inv(cam_data.view_proj)
+
+    world_pos_homo = inv_view_proj @ ndc_vec
+
+    if world_pos_homo[3] != 0:
+        world_pos_homo /= world_pos_homo[3]
+
+    mouse_pos_world = Vector2(world_pos_homo[0], world_pos_homo[1])
 
     trail_requests = []
     bullet_requests = []
@@ -30,12 +52,7 @@ def player_controller_system(world: World) -> None:
         current_vel = vel_comp.vec
         pos_2d = Vector2(trans.pos.x, trans.pos.y)
 
-        # Calculate Mouse Position using Viewport Resource
-        mouse_pos_screen = Vector2(
-            inp.get_mouse_position().x * viewport.width,
-            inp.get_mouse_position().y * viewport.height,
-        )
-        mouse_diff = pos_2d - mouse_pos_screen
+        mouse_diff = pos_2d - mouse_pos_world
 
         # Thrust
         mag = magnitude_vec(mouse_diff)

@@ -1,13 +1,17 @@
+# sparrow/graphics/passes/polygon_2d.py
 import struct
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Optional
 
 import moderngl
 import numpy as np
+from glm import e
 
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
+    PassFeatures,
     PassResourceUse,
     RenderPass,
 )
@@ -20,11 +24,13 @@ from sparrow.graphics.shaders.shader_manager import ShaderRequest
 from sparrow.graphics.util.ids import ResourceId, ShaderId
 
 
+@dataclass(kw_only=True)
 class Polygon2DPass(RenderPass):
     color_target: Optional[ResourceId] = None
 
+    features: PassFeatures = PassFeatures.CAMERA | PassFeatures.RESOLUTION
+
     _program: moderngl.Program | None = None
-    _u_view_proj: moderngl.Uniform | None = None
     _fbo_rid: ResourceId | None = None
 
     _vbo: moderngl.Buffer | None = None
@@ -61,7 +67,9 @@ class Polygon2DPass(RenderPass):
         )
         self._program = services.shader_manager.get(req).program
 
-        self._u_view_proj = self._program["u_view_proj"]
+        super().on_graph_compiled(
+            ctx=ctx, resources=resources, services=services
+        )
 
         if self.color_target:
             self._fbo_rid = ResourceId(f"fbo:{self.pass_id}")
@@ -82,6 +90,8 @@ class Polygon2DPass(RenderPass):
         if not self._program:
             return
 
+        self.execute_base(exec_ctx)
+
         gl = exec_ctx.gl
         frame = exec_ctx.frame
 
@@ -99,12 +109,6 @@ class Polygon2DPass(RenderPass):
         gl.disable(moderngl.DEPTH_TEST)
         gl.enable(moderngl.BLEND)
         gl.clear()
-
-        proj = self._ortho_projection(
-            0, exec_ctx.viewport_width, 0, exec_ctx.viewport_height, -1.0, 1.0
-        )
-        if self._u_view_proj:
-            self._u_view_proj.write(proj.tobytes())
 
         batches = defaultdict(bytearray)
         vertex_counts = defaultdict(int)
@@ -127,9 +131,7 @@ class Polygon2DPass(RenderPass):
 
             r, g, b, a = poly.color
             c_bytes = struct.pack("4f", r, g, b, a)
-
             key = (poly.layer, poly.stroke_width)
-
             target_batch = batches[key]
 
             for i in range(num_v - 1):
@@ -137,14 +139,12 @@ class Polygon2DPass(RenderPass):
                     struct.pack("2f", world_verts[i][0], world_verts[i][1])
                 )
                 target_batch.extend(c_bytes)
-
                 target_batch.extend(
                     struct.pack(
                         "2f", world_verts[i + 1][0], world_verts[i + 1][1]
                     )
                 )
                 target_batch.extend(c_bytes)
-
                 vertex_counts[key] += 2
 
             if poly.closed:
@@ -187,7 +187,6 @@ class Polygon2DPass(RenderPass):
 
     def on_graph_destroyed(self) -> None:
         self._program = None
-        self._u_view_proj = None
         self._fbo_rid = None
         if self._vbo:
             self._vbo.release()
