@@ -1,9 +1,11 @@
 from game.components.player import Player
 from game.components.star import Star
 from sparrow.core.components import EID, Transform, Velocity
+from sparrow.core.query import Query
 from sparrow.core.world import World
 from sparrow.resources.core import SimulationTime
 from sparrow.resources.rendering import RenderViewport
+from sparrow.types import Vector2
 
 
 def starfield_system(world: World) -> None:
@@ -17,30 +19,25 @@ def starfield_system(world: World) -> None:
     w, h = viewport.width, viewport.height
     buffer = 100.0
 
-    ref_vel_x, ref_vel_y = 0.0, 0.0
+    ref_vel = Vector2(0, 0)
+    for count, (vels, _) in Query(world, Velocity, Player):
+        ref_vel = Vector2(vels.vec.x[0], vels.vec.y[0])
+        break
 
-    for count, (vels, _) in world.get_batch(Velocity, Player):
-        if count > 0:
-            v = vels["vec"][0]
-            ref_vel_x, ref_vel_y = v[0], v[1]
-
-    if ref_vel_x == 0 and ref_vel_y == 0:
+    if ref_vel.x == 0 and ref_vel.y == 0:
         return
 
-    for count, (transforms, _, eids) in world.get_batch(Transform, Star, EID):
-        pos_x = transforms["pos"][:, 0]
-        pos_y = transforms["pos"][:, 1]
+    for count, (transforms, _) in Query(world, Transform, Star):
+        depths = transforms.scale.x
 
-        depths = transforms["scale"][:, 0]
+        shift_x = ref_vel.x * depths * 5.0 * dt
+        shift_y = ref_vel.y * depths * 5.0 * dt
 
-        shift_x = ref_vel_x * depths * 5.0 * dt
-        shift_y = ref_vel_y * depths * 5.0 * dt
-
-        pos_x -= shift_x
-        pos_y -= shift_y
+        transforms.pos.x -= shift_x
+        transforms.pos.y -= shift_y
 
         min_x, min_y = -buffer, -buffer
         span_x, span_y = w + (buffer * 2), h + (buffer * 2)
 
-        pos_x[:] = ((pos_x - min_x) % span_x) + min_x
-        pos_y[:] = ((pos_y - min_y) % span_y) + min_y
+        transforms.pos.x[:] = ((transforms.pos.x - min_x) % span_x) + min_x
+        transforms.pos.y[:] = ((transforms.pos.y - min_y) % span_y) + min_y

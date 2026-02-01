@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING, List, Optional
 import pygame
 
 from sparrow.core.components import (
+    EID,
     Mesh,
     PointLight,
     PolygonRenderable,
     RenderLayer,
     Transform,
 )
+from sparrow.core.query import Query
 from sparrow.core.scheduler import Scheduler, Stage
 from sparrow.core.world import World
 from sparrow.graphics.ecs.frame_submit import (
@@ -27,6 +29,7 @@ from sparrow.graphics.renderer.settings import (
 )
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
+from sparrow.math import batch_transform_to_matrix
 from sparrow.resources.cameras import CameraOutput
 from sparrow.resources.core import SimulationTime
 from sparrow.resources.physics import Gravity
@@ -201,48 +204,68 @@ class Scene:
 
         draws: List[DrawItem] = []
         draw_id = 0
-        for eid, mesh, transform in self.world.join(Mesh, Transform):
-            draws.append(
-                DrawItem(
-                    mesh.mesh_id,
-                    mesh.material_id,
-                    transform.matrix_transform,
-                    draw_id,
-                )
+        for count, (meshes, transforms) in Query(self.world, Mesh, Transform):
+            models = batch_transform_to_matrix(
+                transforms.pos.vec,
+                transforms.rot.vec,
+                transforms.scale.vec,
             )
-            draw_id += 1
+
+            for i in range(count):
+                draws.append(
+                    DrawItem(
+                        meshes.mesh_id[i],
+                        meshes.material_id[i],
+                        models[i],
+                        draw_id,
+                    )
+                )
+                draw_id += 1
 
         point_lights: List[LightPoint] = []
         light_id = 0
-        for eid, light, transform in self.world.join(PointLight, Transform):
-            point_lights.append(
-                LightPoint(
-                    transform.pos,
-                    light.radius,
-                    light.color,
-                    light.intensity,
-                    light_id,
+        for count, (lights, transforms) in Query(
+            self.world, PointLight, Transform
+        ):
+            for i in range(count):
+                point_lights.append(
+                    LightPoint(
+                        transforms.pos.vec[i],
+                        lights.radius[i],
+                        lights.color[i],
+                        lights.intensity[i],
+                        light_id,
+                    )
                 )
-            )
-            light_id += 1
+                light_id += 1
 
         polygons: List[PolygonDrawItem] = []
-        for eid, poly, transform in self.world.join(
-            PolygonRenderable, Transform
+        for count, (polys, transforms, eids) in Query(
+            self.world, PolygonRenderable, Transform, EID
         ):
-            layer_comp = self.world.component(eid, RenderLayer)
-            layer_order = layer_comp.order if layer_comp else 0
-
-            polygons.append(
-                PolygonDrawItem(
-                    vertices=poly.vertices,
-                    color=poly.color,
-                    model=transform.matrix_transform,
-                    stroke_width=poly.stroke_width,
-                    closed=poly.closed,
-                    layer=layer_order,
-                )
+            models = batch_transform_to_matrix(
+                transforms.pos.vec,
+                transforms.rot.vec,
+                transforms.scale.vec,
             )
+
+            for i in range(count):
+                eid_native = eids[i].item()
+                layer_comp = self.world.component(eid_native, RenderLayer)
+                layer_order = layer_comp.order if layer_comp else 0
+
+                width_native = polys.stroke_width[i].item()
+
+                polygons.append(
+                    PolygonDrawItem(
+                        vertices=polys.vertices[i],
+                        color=polys.color[i],
+                        model=models[i],
+                        stroke_width=width_native,
+                        closed=polys.closed[i],
+                        layer=layer_order,
+                    )
+                )
 
         return RenderFrameInput(
             frame_index=self.frame_index,

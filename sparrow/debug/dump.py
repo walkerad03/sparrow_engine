@@ -1,4 +1,4 @@
-# sparrow/graphics/debug/dump.py
+# sparrow/debug/dump.py
 from __future__ import annotations
 
 import moderngl

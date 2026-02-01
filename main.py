@@ -1,12 +1,11 @@
 # main.py
-
 from __future__ import annotations
 
 from pathlib import Path
 
 from game.scenes.polygon_scene import PolygonScene
 from sparrow.core.application import Application
-from sparrow.graphics.debug.profiler import profile
+from sparrow.debug.profiler import profile
 
 
 @profile(out_dir=Path(".debug"), enabled=True)

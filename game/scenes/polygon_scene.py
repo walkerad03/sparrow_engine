@@ -10,6 +10,7 @@ from sparrow.core.components import Camera, Transform
 from sparrow.core.scene import Scene
 from sparrow.core.scheduler import Stage
 from sparrow.graphics.renderer.settings import (
+    ForwardRendererSettings,
     PolygonRendererSettings,
     ResolutionSettings,
     SunlightSettings,
@@ -53,7 +54,7 @@ class PolygonScene(Scene):
 
         create_player(self.world)
 
-        for _ in range(50):
+        for _ in range(1000):
             create_star(self.world, Vector2(self.w, self.h))
 
         super().on_start()

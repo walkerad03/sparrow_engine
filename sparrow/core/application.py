@@ -103,7 +103,7 @@ class Application:
                 pygame.display.flip()
 
             if self.clock is not None:
-                self.clock.tick(120)
+                self.clock.tick(60)
 
         if self._pygame_initialized:
             pygame.quit()

@@ -7,10 +7,10 @@ from typing import Callable, Optional
 
 import moderngl
 
+from sparrow.debug.dump import dump_render_graph_state
 from sparrow.graphics.assets.material_manager import MaterialManager
 from sparrow.graphics.assets.mesh_manager import MeshManager
 from sparrow.graphics.assets.texture_manager import TextureManager
-from sparrow.graphics.debug.dump import dump_render_graph_state
 from sparrow.graphics.ecs.frame_submit import RenderFrameInput
 from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.compilation import compile_render_graph
