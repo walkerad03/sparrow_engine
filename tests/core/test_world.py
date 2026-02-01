@@ -1,4 +1,3 @@
-
 from tests.conftest import Health, Position, Velocity
 
 
@@ -44,9 +43,9 @@ def test_query_join(world):
     # Entity A: Pos + Vel
     e1 = world.create_entity(Position(0, 0), Velocity(0, 0))
     # Entity B: Pos Only
-    e2 = world.create_entity(Position(1, 1))
+    world.create_entity(Position(1, 1))
     # Entity C: Vel Only
-    e3 = world.create_entity(Velocity(2, 2))
+    world.create_entity(Velocity(2, 2))
     # Entity D: Pos + Vel + Health
     e4 = world.create_entity(Position(3, 3), Velocity(3, 3), Health(100))
 

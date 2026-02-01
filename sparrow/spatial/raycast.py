@@ -1,4 +1,3 @@
-import math
 from typing import Optional, Tuple
 
 from .grid import Grid
@@ -39,9 +38,6 @@ def raycast(
         side_dist_y = ((map_y + 1) * grid.tile_size - y1) * delta_dist_y
     else:
         side_dist_y = (y1 - map_y * grid.tile_size) * delta_dist_y
-
-    # 4. Total Ray Length
-    ray_len = math.sqrt(dx * dx + dy * dy)
 
     # 5. DDA Loop
     hit = False

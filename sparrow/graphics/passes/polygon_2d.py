@@ -172,15 +172,15 @@ class Polygon2DPass(RenderPass):
             gl.line_width = width
             self._vao.render(moderngl.LINES, vertices=count)
 
-    def _ortho_projection(self, l, r, b, t, n, f):
+    def _ortho_projection(self, left, right, b, t, n, f):
         """Standard Ortho Matrix"""
-        rml, tmb, fmn = r - l, t - b, f - n
+        rml, tmb, fmn = right - left, t - b, f - n
         return np.array(
             [
                 [2.0 / rml, 0.0, 0.0, 0.0],
                 [0.0, 2.0 / tmb, 0.0, 0.0],
                 [0.0, 0.0, -2.0 / fmn, 0.0],
-                [-(r + l) / rml, -(t + b) / tmb, -(f + n) / fmn, 1.0],
+                [-(right + left) / rml, -(t + b) / tmb, -(f + n) / fmn, 1.0],
             ],
             dtype="f4",
         )

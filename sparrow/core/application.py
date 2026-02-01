@@ -1,5 +1,4 @@
 # sparrow/core/application.py
-import time
 from dataclasses import replace
 from typing import Optional, Type
 
@@ -104,7 +103,7 @@ class Application:
                 pygame.display.flip()
 
             if self.clock is not None:
-                self.clock.tick(60)
+                self.clock.tick(120)
 
         if self._pygame_initialized:
             pygame.quit()

@@ -216,10 +216,7 @@ class ChildOf:
 class Lifetime:
     """ """
 
-    __soa_dtype__ = [
-        ("duration", "f4", (1,)),
-        ("time_alive", "f4", (1,)),
-    ]
+    __soa_dtype__ = [("time_alive", "f4"), ("duration", "f4")]
 
     duration: Scalar  # seconds
     time_alive: Scalar = 0.0

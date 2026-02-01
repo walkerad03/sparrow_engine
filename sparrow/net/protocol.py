@@ -2,7 +2,6 @@ import struct
 from enum import IntEnum, auto
 from typing import Optional, Tuple
 
-from sparrow.types import EntityId
 
 
 class PacketType(IntEnum):

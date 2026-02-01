@@ -1,4 +1,4 @@
-from dataclasses import replace
+import numpy as np
 
 from game.components.spaceship import ShipTrail
 from sparrow.core.components import Lifetime, PolygonRenderable
@@ -9,32 +9,48 @@ def trail_vfx_system(world: World) -> None:
     """
     Update the color and width of ship trails over their lifetime.
     """
-    for eid, lt, poly, _ in world.join(Lifetime, PolygonRenderable, ShipTrail):
-        ta = lt.time_alive
-        t = ta / lt.duration
+    for count, (lts, polys, _) in world.get_batch(
+        Lifetime, PolygonRenderable, ShipTrail
+    ):
+        if count == 0:
+            continue
+
+        time_alive = lts["time_alive"]
+        duration = lts["duration"]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = (time_alive / duration).flatten()
+            t = np.clip(t, 0.0, 1.0)
+
         current_alpha = 1.0 - t
+        polys["color"][:, 3] = current_alpha
+
+        width_values = np.maximum(0.5, 3.0 * current_alpha)
+        polys["stroke_width"] = width_values[:, None]
 
         swap_threshold = 0.15
 
-        if t < swap_threshold:
-            mix = t / swap_threshold
+        mask_a = t < (swap_threshold * 0.5)
+        mask_b = (t >= (swap_threshold * 0.5)) & (t < swap_threshold)
+        mask_c = t >= swap_threshold
 
-            if mix < 0.5:
-                local_mix = mix * 2.0
-                r = 1.0
-                g = (0.6 * (1 - local_mix)) + (1.0 * local_mix)
-                b = (0.0 * (1 - local_mix)) + (1.0 * local_mix)
-            else:
-                local_mix = (mix - 0.5) * 2.0
-                r = (1.0 * (1 - local_mix)) + (0.0 * local_mix)
-                g = 1.0
-                b = 1.0
-        else:
-            r, g, b = 0.0, 1.0, 1.0
+        if np.any(mask_a):
+            t_subset = t[mask_a]
+            local_mix = t_subset / (swap_threshold * 0.5)
 
-        new_color = (r, g, b, current_alpha)
-        new_width = max(0.5, 3.0 * current_alpha)
+            polys["color"][mask_a, 0] = 1.0
+            polys["color"][mask_a, 1] = 0.6 + (0.4 * local_mix)
+            polys["color"][mask_a, 2] = local_mix
 
-        world.add_component(
-            eid, replace(poly, color=new_color, stroke_width=new_width)
-        )
+        if np.any(mask_b):
+            t_subset = t[mask_b]
+            mix = t_subset / swap_threshold
+            local_mix = (mix - 0.5) * 2.0
+
+            polys["color"][mask_b, 0] = 1.0 - local_mix
+            polys["color"][mask_b, 1] = 1.0
+            polys["color"][mask_b, 2] = 1.0
+
+        if np.any(mask_c):
+            polys["color"][mask_c, 0] = 0.0
+            polys["color"][mask_c, 1] = 1.0
+            polys["color"][mask_c, 2] = 1.0

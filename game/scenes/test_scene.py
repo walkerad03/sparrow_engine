@@ -14,7 +14,6 @@ from sparrow.core.components import (
     Transform,
 )
 from sparrow.core.scene import Scene
-from sparrow.graphics.assets.mesh_manager import MeshManager
 from sparrow.graphics.renderer.settings import (
     ForwardRendererSettings,
     ResolutionSettings,

@@ -1,15 +1,8 @@
-from typing import Tuple
-
 import numpy as np
 from numpy.typing import NDArray
 
 from sparrow.core.components import Collider3D, RigidBody, Transform
 from sparrow.core.world import World
-from sparrow.math import (
-    cross_product_vec3,
-    rotate_vec_by_quat,
-    rotate_vec_by_quat_inv,
-)
 from sparrow.physics.obb import get_obb_manifold
 from sparrow.resources.physics import Gravity
 from sparrow.types import Quaternion, Vector3
@@ -190,16 +183,20 @@ def _view_collider(c_array: NDArray, idx: int) -> Collider3D:
     )
 
 
-def _view_collider_center_world(
-    trans: NDArray, idx: int
-) -> Tuple[float, float, float]:
-    p = trans["pos"][idx]
-    r = trans["rot"][idx]
-    s = trans["scale"][idx]
+def _resolve_collision_soa(
+    bodies_a: NDArray,
+    trans_a: NDArray,
+    idx_a: int,
+    bodies_b: NDArray,
+    trans_b: NDArray,
+    idx_b: int,
+    normal: Vector3,
+    depth: float,
+    contact_point: Vector3,
+): ...
 
-    return (p[0], p[1], [p2])
 
-
+"""
 def _resolve_collision_soa(
     bodies_a: NDArray,
     trans_a: NDArray,
@@ -211,13 +208,7 @@ def _resolve_collision_soa(
     depth: float,
     contact_point: Vector3,
 ):
-    """
 
-
-    Resolves collision modifying the NumPy arrays in-place.
-
-
-    """
 
     percent = 0.8
 
@@ -388,3 +379,4 @@ def _resolve_collision_soa(
     bodies_b["angular_velocity"][idx_b] -= np.array(
         [delta_ang_vel_b.x, delta_ang_vel_b.y, delta_ang_vel_b.z]
     )
+"""

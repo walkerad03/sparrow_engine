@@ -1,12 +1,9 @@
-from dataclasses import replace
-
 from game.components.player import Player
 from game.components.star import Star
-from sparrow.core.components import Transform, Velocity
+from sparrow.core.components import EID, Transform, Velocity
 from sparrow.core.world import World
 from sparrow.resources.core import SimulationTime
 from sparrow.resources.rendering import RenderViewport
-from sparrow.types import Vector2, Vector3
 
 
 def starfield_system(world: World) -> None:
@@ -18,33 +15,32 @@ def starfield_system(world: World) -> None:
 
     dt = sim_time.delta_seconds
     w, h = viewport.width, viewport.height
-    buffer = 100
+    buffer = 100.0
 
-    ref_vel = Vector2(0.0, 0.0)
+    ref_vel_x, ref_vel_y = 0.0, 0.0
 
-    for _, vel, _ in world.join(Velocity, Player):
-        ref_vel = vel.vec
-        break
+    for count, (vels, _) in world.get_batch(Velocity, Player):
+        if count > 0:
+            v = vels["vec"][0]
+            ref_vel_x, ref_vel_y = v[0], v[1]
 
-    if ref_vel.x == 0 and ref_vel.y == 0:
+    if ref_vel_x == 0 and ref_vel_y == 0:
         return
 
-    for eid, t, _ in world.join(Transform, Star):
-        depth = t.scale.x
+    for count, (transforms, _, eids) in world.get_batch(Transform, Star, EID):
+        pos_x = transforms["pos"][:, 0]
+        pos_y = transforms["pos"][:, 1]
 
-        parallax_speed = ref_vel * depth * 5 * dt
+        depths = transforms["scale"][:, 0]
 
-        sx = t.pos.x - parallax_speed.x
-        sy = t.pos.y - parallax_speed.y
+        shift_x = ref_vel_x * depths * 5.0 * dt
+        shift_y = ref_vel_y * depths * 5.0 * dt
 
-        if sx < -buffer:
-            sx += w + (buffer * 2)
-        elif sx > w + buffer:
-            sx -= w + (buffer * 2)
+        pos_x -= shift_x
+        pos_y -= shift_y
 
-        if sy < -buffer:
-            sy += h + (buffer * 2)
-        elif sy > h + buffer:
-            sy -= h + (buffer * 2)
+        min_x, min_y = -buffer, -buffer
+        span_x, span_y = w + (buffer * 2), h + (buffer * 2)
 
-        world.add_component(eid, replace(t, pos=Vector3(sx, sy, 0)))
+        pos_x[:] = ((pos_x - min_x) % span_x) + min_x
+        pos_y[:] = ((pos_y - min_y) % span_y) + min_y
