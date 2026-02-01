@@ -30,7 +30,7 @@ class MeshManager:
         self._gl = gl
         self._meshes: Dict[MeshId, MeshHandle] = {}
 
-        self._load_engine_defaults()
+        # self._load_engine_defaults()
 
     def _load_engine_defaults(self) -> None:
         self.create(

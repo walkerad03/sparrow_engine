@@ -12,7 +12,7 @@ def starfield_system(world: World) -> None:
     sim_time = world.try_resource(SimulationTime)
     cam_out = world.try_resource(CameraOutput)
 
-    if not (sim_time and cam_out):
+    if not (sim_time and cam_out and cam_out.active):
         return
 
     dt = sim_time.delta_seconds

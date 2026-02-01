@@ -16,11 +16,13 @@ from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.graph.compilation import compile_render_graph
 from sparrow.graphics.graph.pass_base import RenderServices
 from sparrow.graphics.graph.render_graph import CompiledRenderGraph
+from sparrow.graphics.pipelines.blit import build_blit_pipeline
 from sparrow.graphics.pipelines.deferred import build_deferred_pipeline
 from sparrow.graphics.pipelines.forward import build_forward_pipeline
 from sparrow.graphics.pipelines.polygon import build_polygon_pipeline
 from sparrow.graphics.pipelines.raytracing import build_raytracing_pipeline
 from sparrow.graphics.renderer.settings import (
+    BlitRendererSettings,
     DeferredRendererSettings,
     ForwardRendererSettings,
     PolygonRendererSettings,
@@ -80,6 +82,8 @@ class Renderer:
             build_raytracing_pipeline(builder, self.settings)
         elif isinstance(self.settings, PolygonRendererSettings):
             build_polygon_pipeline(builder, self.settings)
+        elif isinstance(self.settings, BlitRendererSettings):
+            build_blit_pipeline(builder, self.settings)
         else:
             pipeline_type = type(self.settings).__name__
             raise TypeError(f"No default pipeline setup for {pipeline_type}")

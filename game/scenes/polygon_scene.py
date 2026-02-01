@@ -1,6 +1,5 @@
 import random
 from dataclasses import replace
-from typing import reveal_type
 
 from game.factories.actor import create_enemy, create_player
 from game.factories.game_object import create_star
@@ -42,7 +41,7 @@ class PolygonScene(Scene):
         self.scheduler.add_system(Stage.UPDATE, starfield_system)
         self.scheduler.add_system(Stage.UPDATE, boid_system)
 
-        self.world.add_resource(RendererSettingsResource(self.settings))
+        # self.world.add_resource(RendererSettingsResource(self.settings))
 
         self.cid = self.world.create_entity(
             Transform(pos=Vector3(960, 540, 0)),
@@ -61,8 +60,8 @@ class PolygonScene(Scene):
             create_star(self.world, Vector2(self.w, self.h))
 
         for _ in range(100):
-            sx = random.uniform(0, self.w)
-            sy = random.uniform(0, self.h)
+            sx = random.uniform(-self.w * 10, self.w * 10)
+            sy = random.uniform(-self.h * 10, self.h * 10)
             create_enemy(self.world, sx=sx, sy=sy)
 
         super().on_start()

@@ -107,4 +107,4 @@ def player_controller_system(world: World) -> None:
         create_spaceship_trail(world, pos_a=pos_a, pos_b=pos_b)
 
     for pos, ang in bullet_requests:
-        create_bullet(world, pos=pos, speed=900, angle=ang)
+        create_bullet(world, pos=pos, speed=2000, angle=ang)

@@ -29,6 +29,7 @@ class TextureManager:
         self._load_engine_defaults()
 
     def _load_engine_defaults(self) -> None:
+        """
         sky_data = generate_spectral_sky_lut(
             width=512,
             height=256,
@@ -37,10 +38,6 @@ class TextureManager:
             sun_elevation=15.0,
             sun_rotation=0.0,
         )
-
-        """sky_data = generate_nishita_sky_lut(
-            width=512, height=256, sun_dir=(0.0, 1.0, 0.0)
-        )"""
 
         self.create_from_bytes(
             TextureId("engine.sky_lut"),
@@ -65,6 +62,20 @@ class TextureManager:
             dtype="f1",
             label="Pupil Aperture",
         )
+        """
+        img = Image.open(
+            "sparrow/graphics/assets/defaults/textures/splashscreen.png"
+        ).convert("RGBA")
+
+        self.create_from_bytes(
+            tex_id=TextureId("engine.splashscreen"),
+            data=img.tobytes(),
+            width=img.width,
+            height=img.height,
+            components=4,
+            dtype="f1",
+            label="Pupil Aperture",
+        )
 
     def create_from_bytes(
         self,
@@ -80,7 +91,9 @@ class TextureManager:
         if tex_id in self._textures:
             raise KeyError(f"Texture '{tex_id}' already exists")
 
-        texture = self._gl.texture((width, height), components, data=data, dtype=dtype)
+        texture = self._gl.texture(
+            (width, height), components, data=data, dtype=dtype
+        )
 
         texture.repeat_x = False
         texture.repeat_y = False
