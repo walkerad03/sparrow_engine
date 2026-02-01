@@ -23,6 +23,12 @@ class VectorView:
         """Allows access like polys.color[i]"""
         return self._data[key]
 
+    def __setitem__(self, key, value):
+        """Allows assignment like vels.vec[:] = ... or vels.vec[i] = ..."""
+        if not isinstance(value, (np.ndarray, list, tuple, float, int)):
+            value = tuple(value)
+        self._data[key] = value
+
     @property
     def x(self) -> np.ndarray:
         return self._data[:, 0]

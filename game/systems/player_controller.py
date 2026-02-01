@@ -43,7 +43,15 @@ def player_controller_system(world: World) -> None:
         norm_diff_vec2 = Vector2(norm_diff.x, norm_diff.y)
 
         # Physics Constants
-        force_vec = norm_diff_vec2 * max(-mag, -3600.0)
+        force_scalar = 3600.0
+        drag_scalar = 0.003
+
+        if inp.get_mouse_pressed()[2]:
+            force_scalar *= 4
+        if inp.is_pressed("SPACE"):
+            force_scalar *= 0
+            drag_scalar *= 0
+        force_vec = norm_diff_vec2 * max(-(mag**2), -force_scalar)
         current_vel += force_vec * dt
 
         # Drag
@@ -51,7 +59,7 @@ def player_controller_system(world: World) -> None:
         if speed > 0:
             drag_dir = norm_vec(current_vel)
             drag_dir_vec2 = Vector2(drag_dir.x, drag_dir.y)
-            drag_force = drag_dir_vec2 * (speed**2) * 0.003
+            drag_force = drag_dir_vec2 * (speed**2) * drag_scalar
             current_vel -= drag_force * dt
 
         # Rotation
@@ -75,7 +83,7 @@ def player_controller_system(world: World) -> None:
         trail_requests.append((engine_l_curr - trail_offset, engine_l_curr))
         trail_requests.append((engine_r_curr - trail_offset, engine_r_curr))
 
-        if inp.is_pressed("SPACE"):
+        if inp.get_mouse_pressed()[0]:
             bullet_requests.append((pos_2d, angle))
 
     for pos_a, pos_b in trail_requests:

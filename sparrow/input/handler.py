@@ -1,4 +1,4 @@
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple
 
 import pygame
 
@@ -80,6 +80,10 @@ class InputHandler:
 
         w, h = surface.get_size()
         return Vector2(pos[0] / w, 1.0 - (pos[1] / h))
+
+    def get_mouse_pressed(self) -> Tuple[bool, bool, bool]:
+        """Returns (Left, Middle, Right) states."""
+        return pygame.mouse.get_pressed()
 
     def is_pressed(self, action: InputAction) -> bool:
         """Returns True if the action button is currently held."""

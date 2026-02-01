@@ -1,6 +1,6 @@
 from game.components.player import Player
 from game.components.star import Star
-from sparrow.core.components import EID, Transform, Velocity
+from sparrow.core.components import Transform, Velocity
 from sparrow.core.query import Query
 from sparrow.core.world import World
 from sparrow.resources.core import SimulationTime
@@ -30,8 +30,8 @@ def starfield_system(world: World) -> None:
     for count, (transforms, _) in Query(world, Transform, Star):
         depths = transforms.scale.x
 
-        shift_x = ref_vel.x * depths * 5.0 * dt
-        shift_y = ref_vel.y * depths * 5.0 * dt
+        shift_x = ref_vel.x * depths * 0.5 * dt
+        shift_y = ref_vel.y * depths * 0.5 * dt
 
         transforms.pos.x -= shift_x
         transforms.pos.y -= shift_y
