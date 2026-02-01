@@ -16,6 +16,7 @@ from typing import (
 import numpy as np
 
 from sparrow.core.archetype import Archetype
+from sparrow.core.components import EID
 from sparrow.core.events import EventManager
 from sparrow.core.registry import ComponentRegistry
 from sparrow.core.resources import ResourceManager
@@ -95,6 +96,7 @@ class World:
         row = arch.add(eid, {})
         self._entities[eid] = EntityRecord(arch, row)
 
+        self.add_component(eid, EID(eid))
         for c in components:
             self.add_component(eid, c)
 

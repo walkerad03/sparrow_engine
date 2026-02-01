@@ -48,6 +48,10 @@ class RendererSettings(ABC):
 
 
 @dataclass(frozen=True, slots=True)
+class PolygonRendererSettings(RendererSettings): ...
+
+
+@dataclass(frozen=True, slots=True)
 class DeferredRendererSettings(RendererSettings):
     """Deferred renderer configuration."""
 

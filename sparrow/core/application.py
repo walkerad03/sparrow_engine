@@ -1,12 +1,15 @@
 # sparrow/core/application.py
 import time
+from dataclasses import replace
 from typing import Optional, Type
 
 import moderngl
 import pygame
 
 from sparrow.core.scene import Scene
+from sparrow.core.timing import FixedStep
 from sparrow.input.handler import InputHandler
+from sparrow.resources.core import SimulationTime
 from sparrow.resources.rendering import RenderContext, RenderViewport
 
 
@@ -20,6 +23,7 @@ class Application:
         self._title = title
         self.clock: pygame.time.Clock | None = None
         self._pygame_initialized = False
+        self.timer = FixedStep(target_fps=60)
         self.running = False
         self.active_scene: Optional[Scene] = None
 
@@ -54,6 +58,16 @@ class Application:
         self.change_scene(start_scene_cls)
         self.running = True
 
+        if self.active_scene and not self.active_scene.world.try_resource(
+            SimulationTime
+        ):
+            print(
+                "Warning: SimulationTime missing after Scene start. Creating default."
+            )
+            self.active_scene.world.add_resource(SimulationTime())
+
+        self.timer.start()
+
         while self.running:
             if self.window is not None:
                 for event in pygame.event.get():
@@ -68,11 +82,22 @@ class Application:
                         inp.process_event(event)
 
             if self.active_scene:
-                now = time.perf_counter()
-                dt = now - self.active_scene.last_time
-                self.active_scene.last_time = now
+                steps = self.timer.advance()
 
-                self.active_scene.on_update(dt)
+                sim_time = self.active_scene.world.get_resource(SimulationTime)
+
+                for _ in range(steps):
+                    scaled_dt = self.timer.dt * sim_time.time_scale
+
+                    new_st = replace(
+                        sim_time,
+                        fixed_delta_seconds=self.timer.dt,
+                        delta_seconds=scaled_dt,
+                        elapsed_seconds=sim_time.elapsed_seconds + scaled_dt,
+                    )
+                    self.active_scene.world.mutate_resource(new_st)
+                    self.active_scene.on_update()
+
                 self.active_scene.on_render()
 
             if self.window is not None:
@@ -80,8 +105,6 @@ class Application:
 
             if self.clock is not None:
                 self.clock.tick(60)
-            else:
-                time.sleep(1 / 60)
 
         if self._pygame_initialized:
             pygame.quit()

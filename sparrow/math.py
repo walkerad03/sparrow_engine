@@ -7,6 +7,10 @@ from sparrow.types import Quaternion, Scalar, Vector2, Vector3
 V = TypeVar("V", Vector2, Vector3)
 
 
+def deg_to_rad(d: Scalar) -> Scalar:
+    return d * math.pi / 180.0
+
+
 # -- Vector Math --
 def magnitude_vec(v: Union[Vector2, Vector3]) -> Scalar:
     return math.hypot(*v)

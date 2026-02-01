@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from game.scenes.test_scene import TestScene
+from game.scenes.polygon_scene import PolygonScene
 from sparrow.core.application import Application
 from sparrow.graphics.debug.profiler import profile
 
@@ -13,7 +13,7 @@ from sparrow.graphics.debug.profiler import profile
 def main() -> None:
     """Main entrypoint for the minimal renderer test app."""
     app = Application(width=1920, height=1080)
-    app.run(TestScene)
+    app.run(PolygonScene)
 
 
 if __name__ == "__main__":

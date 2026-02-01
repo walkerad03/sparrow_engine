@@ -6,7 +6,22 @@ import numpy as np
 from numpy.typing import NDArray
 
 from sparrow.graphics.util.ids import MaterialId, MeshId
-from sparrow.types import EntityId, Quaternion, Rect, Vector2, Vector3
+from sparrow.types import (
+    Color,
+    EntityId,
+    Quaternion,
+    Rect,
+    Scalar,
+    Vector2,
+    Vector3,
+)
+
+
+@dataclass(frozen=True)
+class EID:
+    id: EntityId
+    __soa_dtype__ = [("id", "i8")]
+
 
 # --- SPATIAL COMPONENTS ---
 
@@ -54,6 +69,13 @@ class Transform:
             self.rot,
             self.scale,
         )
+
+
+@dataclass(frozen=True)
+class Velocity:
+    __soa_dtype__ = [("vec", "f4", (2,))]
+
+    vec: Vector2
 
 
 # Physics
@@ -177,7 +199,7 @@ class BoxCollider:
 @dataclass
 class ChildOf:
     """
-    Component: Marks this entity as a child of another.
+    Marks this entity as a child of another.
     The HierarchySystem will snap this entity's position to the parent's.
     """
 
@@ -188,6 +210,19 @@ class ChildOf:
 
     parent: EntityId
     offset: Vector3 = Vector3(0.0, 0.0, 0.0)
+
+
+@dataclass
+class Lifetime:
+    """ """
+
+    __soa_dtype__ = [
+        ("duration", "f4", (1,)),
+        ("time_alive", "f4", (1,)),
+    ]
+
+    duration: Scalar  # seconds
+    time_alive: Scalar = 0.0
 
 
 @dataclass(frozen=True)
@@ -260,3 +295,23 @@ class PointLight:
     color: tuple[float, float, float] = (1.0, 1.0, 1.0)
     intensity: float = 1.0
     radius: float = 10.0
+
+
+@dataclass
+class PolygonRenderable:
+    __soa_dtype__ = [
+        ("vertices", "O"),
+        ("color", "f4", (4,)),
+        ("stroke_width", "f4", (1,)),
+        ("closed", "?", (1,)),
+    ]
+
+    vertices: list[Vector2]
+    color: Color
+    stroke_width: Scalar
+    closed: bool  # does the final point connect the first?
+
+
+@dataclass
+class RenderLayer:
+    order: int = 0

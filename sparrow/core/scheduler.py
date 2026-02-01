@@ -24,7 +24,9 @@ class Scheduler:
     def __init__(self):
         self._registered_systems = []
 
-        self._execution_order: Dict[Stage, List[SystemFn]] = {s: [] for s in Stage}
+        self._execution_order: Dict[Stage, List[SystemFn]] = {
+            s: [] for s in Stage
+        }
         self._is_compiled = False
 
     def add_system(
@@ -37,7 +39,9 @@ class Scheduler:
     ) -> None:
         """Register a simple function as a system."""
         if self._is_compiled:
-            raise RuntimeError("Cannot add systems after scheduler is compiled.")
+            raise RuntimeError(
+                "Cannot add systems after scheduler is compiled."
+            )
 
         sys_name = name or SystemId(system.__name__)
 

@@ -3,7 +3,7 @@ from typing import List, Optional, Set
 import pygame
 
 from sparrow.input.context import InputContext
-from sparrow.types import InputAction
+from sparrow.types import InputAction, Vector2
 
 
 class InputHandler:
@@ -68,6 +68,18 @@ class InputHandler:
         self._mouse_delta = [0.0, 0.0]
 
         return dx, dy
+
+    def get_mouse_position(self) -> Vector2:
+        """
+        Return screen space mouse position in a range of 0-1.
+        """
+        pos = pygame.mouse.get_pos()
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return Vector2(0.0, 0.0)
+
+        w, h = surface.get_size()
+        return Vector2(pos[0] / w, 1.0 - (pos[1] / h))
 
     def is_pressed(self, action: InputAction) -> bool:
         """Returns True if the action button is currently held."""

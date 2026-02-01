@@ -4,12 +4,19 @@ from typing import TYPE_CHECKING, List, Optional
 
 import pygame
 
-from sparrow.core.components import Mesh, PointLight, Transform
+from sparrow.core.components import (
+    Mesh,
+    PointLight,
+    PolygonRenderable,
+    RenderLayer,
+    Transform,
+)
 from sparrow.core.scheduler import Scheduler, Stage
 from sparrow.core.world import World
 from sparrow.graphics.ecs.frame_submit import (
     DrawItem,
     LightPoint,
+    PolygonDrawItem,
     RenderFrameInput,
 )
 from sparrow.graphics.renderer.settings import (
@@ -21,6 +28,7 @@ from sparrow.graphics.renderer.settings import (
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
 from sparrow.resources.cameras import CameraOutput
+from sparrow.resources.core import SimulationTime
 from sparrow.resources.physics import Gravity
 from sparrow.resources.rendering import (
     RenderContext,
@@ -29,8 +37,11 @@ from sparrow.resources.rendering import (
     RenderViewport,
 )
 from sparrow.systems.camera import camera_system
+from sparrow.systems.lifetime import lifetime_system
+from sparrow.systems.movement import movement_system
 from sparrow.systems.physics import physics_system
 from sparrow.systems.rendering import ensure_renderer_resource, render_system
+from sparrow.systems.sim_time import simulation_time_system
 from sparrow.types import SystemId
 
 if TYPE_CHECKING:
@@ -40,6 +51,9 @@ if TYPE_CHECKING:
 class SystemNames:
     CAMERA = SystemId("camera")
     PHYSICS = SystemId("physics")
+    LIFETIME = SystemId("lifetime")
+    MOVEMENT = SystemId("movement")
+    SIMULATION_TIME = SystemId("simulation_time")
 
 
 class Scene:
@@ -79,17 +93,31 @@ class Scene:
 
     def _register_default_systems(self):
         self.scheduler.add_system(
+            Stage.STARTUP, camera_system, name=SystemId("camera_startup")
+        )
+        self.scheduler.add_system(
+            Stage.STARTUP,
+            simulation_time_system,
+            name=SystemNames.SIMULATION_TIME,
+        )
+        self.scheduler.add_system(
             Stage.POST_UPDATE, camera_system, name=SystemNames.CAMERA
         )
         self.scheduler.add_system(
             Stage.PHYSICS, physics_system, name=SystemNames.PHYSICS
+        )
+        self.scheduler.add_system(
+            Stage.POST_UPDATE, lifetime_system, name=SystemNames.LIFETIME
+        )
+        self.scheduler.add_system(
+            Stage.UPDATE, movement_system, name=SystemNames.MOVEMENT
         )
 
     def on_start(self) -> None:
         """Called when the scene is first activated."""
         self.scheduler.run_stage(Stage.STARTUP, self.world)
 
-    def on_update(self, dt: float) -> None:
+    def on_update(self) -> None:
         """Called every frame to update game logic."""
         self.frame_index += 1
 
@@ -160,12 +188,16 @@ class Scene:
             raise RuntimeError(
                 "RenderViewport resource missing for render frame."
             )
-
         w, h = viewport.width, viewport.height
 
         cam_out = self.world.try_resource(CameraOutput)
         if cam_out is None or cam_out.active is None:
             raise RuntimeError("No active camera")
+
+        dt = 1 / 60
+        sim_time = self.world.try_resource(SimulationTime)
+        if sim_time:
+            dt = sim_time.delta_seconds
 
         draws: List[DrawItem] = []
         draw_id = 0
@@ -194,12 +226,31 @@ class Scene:
             )
             light_id += 1
 
+        polygons: List[PolygonDrawItem] = []
+        for eid, poly, transform in self.world.join(
+            PolygonRenderable, Transform
+        ):
+            layer_comp = self.world.component(eid, RenderLayer)
+            layer_order = layer_comp.order if layer_comp else 0
+
+            polygons.append(
+                PolygonDrawItem(
+                    vertices=poly.vertices,
+                    color=poly.color,
+                    model=transform.matrix_transform,
+                    stroke_width=poly.stroke_width,
+                    closed=poly.closed,
+                    layer=layer_order,
+                )
+            )
+
         return RenderFrameInput(
             frame_index=self.frame_index,
-            dt_seconds=1 / 60,
+            dt_seconds=dt,
             camera=cam_out.active,
             draws=draws,
             point_lights=point_lights,
+            polygons=polygons,
             viewport_width=w,
             viewport_height=h,
         )

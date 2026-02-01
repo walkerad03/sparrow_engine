@@ -6,6 +6,8 @@ from typing import Mapping, Optional, Sequence
 
 import numpy as np
 
+from sparrow.types import Vector2
+
 
 @dataclass(frozen=True, slots=True)
 class CameraData:
@@ -47,6 +49,21 @@ class DrawItem:
 
 
 @dataclass(frozen=True, slots=True)
+class PolygonDrawItem:
+    """
+    A specific 2D polygon to be drawn this frame.
+    Raw data extracted from PolygonRenderable components.
+    """
+
+    vertices: Sequence[Vector2]
+    color: tuple[float, float, float, float]
+    model: np.ndarray  # Transform matrix
+    stroke_width: float
+    closed: bool
+    layer: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class RenderFrameInput:
     """All inputs needed to render a frame."""
 
@@ -55,6 +72,7 @@ class RenderFrameInput:
     camera: CameraData
     draws: Sequence[DrawItem]
     point_lights: Sequence[LightPoint]
+    polygons: Sequence[PolygonDrawItem] = tuple()
     debug_flags: Optional[Mapping[str, bool]] = None
     viewport_width: Optional[int] = None
     viewport_height: Optional[int] = None

@@ -19,6 +19,8 @@ Address = Tuple[str, int]
 
 Scalar: TypeAlias = float
 
+Color: TypeAlias = Tuple[Scalar, Scalar, Scalar, Scalar]
+
 
 @dataclass(frozen=True, slots=True)
 class Vector2:

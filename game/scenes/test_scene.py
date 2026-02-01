@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 
+from sparrow.core.application import Application
 from sparrow.core.components import (
     Camera,
     Collider3D,
@@ -29,14 +30,21 @@ class TestScene(Scene):
     spawn_cooldown = 30.0
     last_box = spawn_cooldown
 
+    def __init__(self, app: Application):
+        self.w, self.h = 1920, 1080
+
+        resolution = ResolutionSettings(
+            logical_width=self.w, logical_height=self.h
+        )
+        sunlight = SunlightSettings()
+        self.settings = ForwardRendererSettings(resolution, sunlight)
+
+        super().__init__(app, renderer_settings=self.settings)
+
     def on_start(self):
         viewport = self.world.get_resource(RenderViewport)
         w, h = viewport.width, viewport.height
-
-        resolution = ResolutionSettings(logical_width=w, logical_height=h)
-        sunlight = SunlightSettings()
-        settings = ForwardRendererSettings(resolution, sunlight)
-        self.world.add_resource(RendererSettingsResource(settings))
+        self.world.add_resource(RendererSettingsResource(self.settings))
 
         x_pos = math.sin(self.frame_index + 35 / 100.0) * 10.0
         y_pos = 1.25
@@ -68,8 +76,6 @@ class TestScene(Scene):
             RigidBody(inverse_mass=0.0, mass=0.0),
         )
 
-        MeshManager
-
         self.world.create_entity(
             Transform(pos=Vector3(0.0, 5.0, 5.0)),
             PointLight(
@@ -87,8 +93,8 @@ class TestScene(Scene):
 
         super().on_start()
 
-    def on_update(self, dt: float):
-        super().on_update(dt)
+    def on_update(self):
+        super().on_update()
         self.last_box += 1
 
         inp = self.world.get_resource(InputHandler)
