@@ -35,7 +35,7 @@ class SpashScreenScene(Scene):
     def on_update(self):
         super().on_update()
 
-        if self.frame_index > 180:
+        if self.frame_index > 120:
             self.app.change_scene(PolygonScene)
 
     def get_render_frame(self):

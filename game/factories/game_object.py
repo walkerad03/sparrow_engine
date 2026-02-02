@@ -31,7 +31,7 @@ def create_star(world: World, max_range: Vector2) -> EntityId:
                 Vector2(-1.0, -1.0),
                 Vector2(1.0, -1.0),
                 Vector2(1.0, 1.0),
-                Vector2(1.0, -1.0),
+                Vector2(-1.0, 1.0),
             ],
             color=(1.0, 1.0, 1.0, depth),
             stroke_width=max(1.0, 1 - depth * 3),

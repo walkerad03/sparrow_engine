@@ -17,7 +17,6 @@ from sparrow.graphics.renderer.settings import (
     SunlightSettings,
 )
 from sparrow.math import magnitude_vec
-from sparrow.resources.rendering import RendererSettingsResource
 from sparrow.types import Vector2, Vector3
 
 

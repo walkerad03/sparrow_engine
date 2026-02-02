@@ -6,14 +6,12 @@ import moderngl
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
-    PassResourceUse,
     RenderPass,
 )
-from sparrow.graphics.graph.resources import TextureResource, expect_resource
 from sparrow.graphics.helpers.fullscreen import create_fullscreen_triangle
 from sparrow.graphics.shaders.program_types import ShaderStages
 from sparrow.graphics.shaders.shader_manager import ShaderRequest
-from sparrow.graphics.util.ids import ResourceId, ShaderId, TextureId
+from sparrow.graphics.util.ids import ShaderId, TextureId
 
 
 @dataclass(kw_only=True)
