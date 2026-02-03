@@ -21,9 +21,6 @@ class GPUResourceManager:
 
         self._meshes: Dict[AssetId, GPUMesh] = {}
         self._textures: Dict[AssetId, GPUTexture] = {}
-
-        # Shaders are usually handled via ShaderManager on demand,
-        # but if we have raw shader assets, we can store source here.
         self._shader_sources: Dict[AssetId, str] = {}
 
     def sync(self) -> None:
@@ -37,19 +34,22 @@ class GPUResourceManager:
 
         for asset_id in loaded_ids:
             data = self.asset_server.registry.get(asset_id)
-            self._upload_asset(asset_id, data)
+            if data:
+                self._upload_asset(asset_id, data)
 
     def _upload_asset(self, asset_id: AssetId, data: Any) -> None:
         if isinstance(data, MeshData):
+            if asset_id in self._meshes:
+                self._meshes[asset_id].release()
             self._meshes[asset_id] = GPUMesh(self.ctx, data)
 
         elif isinstance(data, TextureData):
+            if asset_id in self._textures:
+                self._textures[asset_id].release()
             self._textures[asset_id] = GPUTexture(self.ctx, data)
 
         elif isinstance(data, ShaderSource):
             self._shader_sources[asset_id] = data.source
-            # NOTE: We don't compile programs here automatically
-            # because we don't know which .vert goes with which .frag yet.
 
     def get_mesh(self, asset_id: AssetId) -> GPUMesh | None:
         return self._meshes.get(asset_id)

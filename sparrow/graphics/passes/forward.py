@@ -6,6 +6,7 @@ from typing import Optional
 
 import moderngl
 
+from sparrow.assets import AssetHandle, AssetServer, DefaultShaders
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
@@ -13,6 +14,8 @@ from sparrow.graphics.graph.pass_base import (
     RenderPass,
     RenderServices,
 )
+from sparrow.graphics.resources import ShaderManager
+from sparrow.graphics.utils.batcher import RenderBatcher
 from sparrow.graphics.utils.ids import ResourceId
 from sparrow.graphics.utils.uniforms import set_uniform
 
@@ -26,101 +29,68 @@ class ForwardPBRPass(RenderPass):
 
     target: Optional[ResourceId] = None
 
-    _program: moderngl.Program | None = None
+    _batcher: RenderBatcher | None = None
+    _vs_handle: AssetHandle | None = None
+    _fs_handle: AssetHandle | None = None
+
+    _asset_server: AssetServer | None = None
+    _shader_manager: ShaderManager | None = None
 
     def build(self) -> PassBuildInfo:
-        writes = []
-        if self.target:
-            writes.append(PassResourceUse(self.target, "write"))
-
-        return PassBuildInfo(
-            pass_id=self.pass_id,
-            reads=[],
-            writes=writes,
-        )
+        writes = [PassResourceUse(self.target, "write")] if self.target else []
+        return PassBuildInfo(pass_id=self.pass_id, reads=[], writes=writes)
 
     def on_compile(
         self, ctx: moderngl.Context, services: RenderServices
     ) -> None:
-        vs = """
-        #version 330 core
-        uniform mat4 u_view_proj;
-        uniform mat4 u_model;
+        self._batcher = RenderBatcher(ctx)
+        self._shader_manager = services.shader_manager
+        self._asset_server = services.gpu_resources.asset_server
 
-        layout (location = 0) in vec3 in_pos;
-        layout (location = 1) in vec3 in_normal;
-        layout (location = 2) in vec2 in_uv;
-
-        out vec3 v_normal;
-        out vec2 v_uv;
-
-        void main() {
-            v_normal = in_normal;
-            v_uv = in_uv;
-            gl_Position = u_view_proj * u_model * vec4(in_pos, 1.0);
-        }
-        """
-
-        fs = """
-        #version 330 core
-        uniform vec3 u_color;
-
-        in vec3 v_normal;
-        in vec2 v_uv;
-        out vec4 fragColor;
-
-        void main() {
-            // Simple Debug Lighting (N dot L)
-            vec3 L = normalize(vec3(0.5, 1.0, 0.5));
-            float NdotL = max(dot(normalize(v_normal), L), 0.1);
-            vec3 uv_tint = vec3(v_uv, 0.0) * 0.0001;
-            fragColor = vec4(u_color * NdotL + uv_tint, 1.0);
-        }
-        """
-        self._program = services.shader_manager.get_program(vs, fs)
+        assert self._asset_server
+        self._vs_handle = self._asset_server.load(DefaultShaders.FORWARD_VS)
+        self._fs_handle = self._asset_server.load(DefaultShaders.FORWARD_FS)
 
     def execute(self, ctx: PassExecutionContext) -> None:
-        if not self._program:
+        assert (
+            self._shader_manager
+            and self._asset_server
+            and self._vs_handle
+            and self._fs_handle
+            and self._batcher
+        )
+
+        program = self._shader_manager.get_program_from_assets(
+            self._asset_server, self._vs_handle, self._fs_handle
+        )
+
+        if not program:
             return
 
         gl = ctx.gl
-        frame = ctx.frame
 
         if self.target:
             ctx.graph_resources[self.target].use()
         else:
             gl.screen.use()
 
-        gl.enable(moderngl.DEPTH_TEST)
-        gl.enable(moderngl.CULL_FACE)
+        gl.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
 
         # TODO: Use UBOs
         set_uniform(
-            self._program,
+            program,
             "u_view_proj",
-            frame.camera.view_proj.T.tobytes(),
+            ctx.frame.camera.view_proj.T.tobytes(),
         )
 
-        for obj in frame.objects:
-            gpu_mesh = ctx.gpu_resources.get_mesh(obj.mesh_id)
+        batches = self._batcher.group_objects(ctx.frame.objects)
+
+        for mesh_id, instances in batches.items():
+            gpu_mesh = ctx.gpu_resources.get_mesh(mesh_id)
             if not gpu_mesh:
                 continue
 
-            set_uniform(
-                self._program,
-                "u_model",
-                obj.transform.T.astype("f4").tobytes(),
-            )
+            self._batcher.prepare_instance_data(instances)
 
-            set_uniform(
-                self._program,
-                "u_color",
-                obj.color[:3],
-            )
-
-            if not gpu_mesh._default_vao:
-                gpu_mesh.create_default_vao(
-                    self._program, "3f 3f 2f", ["in_pos", "in_normal", "in_uv"]
-                )
-
-            gpu_mesh.render()
+            vao = gpu_mesh.get_instanced_vao(program, self._batcher.buffer)
+            vao.render(instances=len(instances))

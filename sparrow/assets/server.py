@@ -3,7 +3,7 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from queue import Queue
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from sparrow.assets.handle import AssetHandle, AssetId
 from sparrow.assets.importers.base import AssetImporter
@@ -80,3 +80,11 @@ class AssetServer:
             loaded_ids.append(asset_id)
 
         return loaded_ids
+
+    def is_ready(self, handle: AssetHandle) -> bool:
+        """Checks if an asset is fully loaded in the registry."""
+        return handle.id in self.registry
+
+    def get_data(self, handle: AssetHandle) -> Any:
+        """Retrieves data from registry. Returns None if not loaded."""
+        return self.registry.get(handle.id)

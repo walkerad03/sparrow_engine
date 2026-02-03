@@ -1,3 +1,4 @@
+# game/scenes/renderer_test_scene.py
 from sparrow.assets import AssetServer, DefaultMeshes
 from sparrow.core.components import Transform
 from sparrow.core.query import Query
@@ -39,13 +40,18 @@ class Test3DScene(Scene):
 
         mesh_handle = self.app.asset_server.load(DefaultMeshes.BUNNY)
 
-        for x in range(-5, 5):
-            for z in range(-5, 5):
-                self.world.create_entity(
-                    Transform(pos=Vector3(x, 0, z)),
-                    Mesh(handle=mesh_handle),
-                    Material(base_color=(1.0, 0.5, 0.2, 1.0)),
-                )
+        for x in range(1, 1000):
+            pos = Vector3(
+                x % 10 - 5,
+                x // 10 % 10 - 5,
+                x // 100 % 10 - 5,
+            )
+
+            self.world.create_entity(
+                Transform(pos=pos),
+                Mesh(handle=mesh_handle),
+                Material(base_color=(1.0, 0.5, 0.2, 1.0)),
+            )
 
         self.world.create_entity(
             Transform(

@@ -56,7 +56,12 @@ def pack_mat4(mat: np.ndarray) -> bytes:
     return mat.astype("f4").tobytes()
 
 
-def set_uniform(program: moderngl.Program, name: str, value: Any) -> None:
+def set_uniform(
+    program: moderngl.Program | None, name: str, value: Any
+) -> None:
+    if not program:
+        return
+
     if name not in program:
         return
 

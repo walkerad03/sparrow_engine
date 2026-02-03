@@ -17,4 +17,12 @@ class DefaultTextures(StrEnum):
 
 
 class DefaultShaders(StrEnum):
-    pass
+    FORWARD_VS = "defaults/shaders/forward.vert"
+    FORWARD_FS = "defaults/shaders/forward.frag"
+
+
+__all__ = [
+    "DefaultMeshes",
+    "DefaultTextures",
+    "DefaultShaders",
+]
