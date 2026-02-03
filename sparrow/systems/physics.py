@@ -13,6 +13,11 @@ SOLVER_ITERATIONS = 4
 
 def physics_system(world: World) -> None:
     gravity_res = world.try_resource(Gravity)
+
+    if not gravity_res:
+        gravity_res = Gravity()
+        world.add_resource(gravity_res)
+
     gravity = gravity_res.acceleration if gravity_res else Vector3(0, -9.81, 0)
     gravity_arr = np.array([gravity.x, gravity.y, gravity.z], dtype=np.float64)
 

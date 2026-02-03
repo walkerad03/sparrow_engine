@@ -1,49 +1,20 @@
+# sparrow/core/scene.py
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 import pygame
 
-from sparrow.core.components import (
-    EID,
-    Mesh,
-    PointLight,
-    PolygonRenderable,
-    RenderLayer,
-    Transform,
-)
-from sparrow.core.query import Query
 from sparrow.core.scheduler import Scheduler, Stage
 from sparrow.core.world import World
-from sparrow.graphics.ecs.frame_submit import (
-    DrawItem,
-    LightPoint,
-    PolygonDrawItem,
-    RenderFrameInput,
-)
-from sparrow.graphics.renderer.settings import (
-    ForwardRendererSettings,
-    RendererSettings,
-    ResolutionSettings,
-    SunlightSettings,
-)
+from sparrow.graphics.core.settings import RendererSettings
+from sparrow.graphics.integration.extraction import extract_render_frame_system
 from sparrow.input.context import InputContext
 from sparrow.input.handler import InputHandler
-from sparrow.math import batch_transform_to_matrix
-from sparrow.resources.cameras import CameraOutput
-from sparrow.resources.core import SimulationTime
-from sparrow.resources.physics import Gravity
-from sparrow.resources.rendering import (
-    RenderContext,
-    RendererSettingsResource,
-    RenderFrame,
-    RenderViewport,
-)
-from sparrow.systems.camera import camera_system
 from sparrow.systems.lifetime import lifetime_system
 from sparrow.systems.movement import movement_system
 from sparrow.systems.physics import physics_system
-from sparrow.systems.rendering import ensure_renderer_resource, render_system
+from sparrow.systems.rendering import render_system
 from sparrow.systems.sim_time import simulation_time_system
 from sparrow.types import SystemId
 
@@ -74,10 +45,14 @@ class Scene:
         self._pending_renderer_settings = renderer_settings
 
         self._register_default_systems()
+        self._setup_input()
 
-        self.frame_index = 0
-        self.last_time = 0
+        if renderer_settings:
+            self.world.add_resource(renderer_settings)
+        else:
+            self.world.add_resource(RendererSettings())
 
+    def _setup_input(self):
         input_handler = InputHandler()
         self.world.add_resource(input_handler)
 
@@ -90,21 +65,11 @@ class Scene:
 
         input_handler.push_context(base_ctx)
 
-        self.world.add_resource(CameraOutput())
-
-        self.world.add_resource(Gravity())
-
     def _register_default_systems(self):
-        self.scheduler.add_system(
-            Stage.STARTUP, camera_system, name=SystemId("camera_startup")
-        )
         self.scheduler.add_system(
             Stage.STARTUP,
             simulation_time_system,
             name=SystemNames.SIMULATION_TIME,
-        )
-        self.scheduler.add_system(
-            Stage.POST_UPDATE, camera_system, name=SystemNames.CAMERA
         )
         self.scheduler.add_system(
             Stage.PHYSICS, physics_system, name=SystemNames.PHYSICS
@@ -122,8 +87,6 @@ class Scene:
 
     def on_update(self) -> None:
         """Called every frame to update game logic."""
-        self.frame_index += 1
-
         self.scheduler.run_stage(Stage.INPUT, self.world)
         self.scheduler.run_stage(Stage.UPDATE, self.world)
         self.scheduler.run_stage(Stage.PHYSICS, self.world)
@@ -137,143 +100,9 @@ class Scene:
         if not self.render_enabled:
             return
 
-        frame = self.get_render_frame()
-        frame_res = RenderFrame(frame)
-
-        if self.world.try_resource(RenderFrame) is None:
-            self.world.add_resource(frame_res)
-        else:
-            self.world.mutate_resource(frame_res)
-
+        extract_render_frame_system(self.world)
         render_system(self.world)
 
     def on_exit(self) -> None:
         """Called when transitioning away from this scene."""
         pass
-
-    def configure_rendering(self) -> None:
-        if not self.render_enabled:
-            return
-
-        if self.world.try_resource(RenderContext) is None:
-            raise RuntimeError(
-                "RenderContext resource missing for renderer setup."
-            )
-
-        if self.world.try_resource(RendererSettingsResource) is None:
-            if self._pending_renderer_settings:
-                settings = self._pending_renderer_settings
-            else:
-                viewport = self.world.try_resource(RenderViewport)
-                if viewport is None:
-                    raise RuntimeError(
-                        "RenderViewport resource missing for renderer setup."
-                    )
-
-                resolution = ResolutionSettings(
-                    logical_width=viewport.width,
-                    logical_height=viewport.height,
-                )
-                sunlight = SunlightSettings()
-                settings = ForwardRendererSettings(resolution, sunlight)
-
-            self.world.add_resource(RendererSettingsResource(settings))
-
-        ensure_renderer_resource(self.world)
-
-    def get_render_frame(self) -> RenderFrameInput:
-        """
-        Extracts data from the ECS World to build the FrameContext for the Renderer.
-        You can override this if you need custom render logic.
-        """
-        viewport = self.world.try_resource(RenderViewport)
-        if viewport is None:
-            raise RuntimeError(
-                "RenderViewport resource missing for render frame."
-            )
-        w, h = viewport.width, viewport.height
-
-        cam_out = self.world.try_resource(CameraOutput)
-        if cam_out is None or cam_out.active is None:
-            raise RuntimeError("No active camera")
-
-        dt = 1 / 60
-        sim_time = self.world.try_resource(SimulationTime)
-        if sim_time:
-            dt = sim_time.delta_seconds
-
-        draws: List[DrawItem] = []
-        draw_id = 0
-        for count, (meshes, transforms) in Query(self.world, Mesh, Transform):
-            models = batch_transform_to_matrix(
-                transforms.pos.vec,
-                transforms.rot.vec,
-                transforms.scale.vec,
-            )
-
-            for i in range(count):
-                draws.append(
-                    DrawItem(
-                        meshes.mesh_id[i],
-                        meshes.material_id[i],
-                        models[i],
-                        draw_id,
-                    )
-                )
-                draw_id += 1
-
-        point_lights: List[LightPoint] = []
-        light_id = 0
-        for count, (lights, transforms) in Query(
-            self.world, PointLight, Transform
-        ):
-            for i in range(count):
-                point_lights.append(
-                    LightPoint(
-                        transforms.pos.vec[i],
-                        lights.radius[i],
-                        lights.color[i],
-                        lights.intensity[i],
-                        light_id,
-                    )
-                )
-                light_id += 1
-
-        polygons: List[PolygonDrawItem] = []
-        for count, (polys, transforms, eids) in Query(
-            self.world, PolygonRenderable, Transform, EID
-        ):
-            models = batch_transform_to_matrix(
-                transforms.pos.vec,
-                transforms.rot.vec,
-                transforms.scale.vec,
-            )
-
-            for i in range(count):
-                eid_native = eids[i].item()
-                layer_comp = self.world.component(eid_native, RenderLayer)
-                layer_order = layer_comp.order if layer_comp else 0
-
-                width_native = polys.stroke_width[i].item()
-
-                polygons.append(
-                    PolygonDrawItem(
-                        vertices=polys.vertices[i],
-                        color=polys.color[i],
-                        model=models[i],
-                        stroke_width=width_native,
-                        closed=polys.closed[i],
-                        layer=layer_order,
-                    )
-                )
-
-        return RenderFrameInput(
-            frame_index=self.frame_index,
-            dt_seconds=dt,
-            camera=cam_out.active,
-            draws=draws,
-            point_lights=point_lights,
-            polygons=polygons,
-            viewport_width=w,
-            viewport_height=h,
-        )

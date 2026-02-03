@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 import moderngl
 
-from sparrow.graphics.ecs.frame_submit import RenderFrameInput
-from sparrow.graphics.renderer.renderer import Renderer
-from sparrow.graphics.renderer.settings import RendererSettings
+from sparrow.graphics.core.renderer import Renderer
+from sparrow.graphics.core.settings import RendererSettings
+from sparrow.graphics.integration.frame import RenderFrame
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,5 +31,5 @@ class RendererResource:
 
 
 @dataclass(frozen=True, slots=True)
-class RenderFrame:
-    frame: RenderFrameInput
+class RenderFrameResource:
+    frame: RenderFrame

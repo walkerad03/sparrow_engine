@@ -3,17 +3,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from game.scenes.polygon_scene import PolygonScene
-from game.scenes.spash_screen import SpashScreenScene
+from game.scenes.renderer_test_scene import Test3DScene
 from sparrow.core.application import Application
 from sparrow.debug.profiler import profile
 
 
-@profile(out_dir=Path(".debug"), enabled=True, target=PolygonScene.on_update)
+@profile(out_dir=Path(".debug"), enabled=True)
 def main() -> None:
     """Main entrypoint for the minimal renderer test app."""
     app = Application(width=1920, height=1080)
-    app.run(SpashScreenScene)
+    app.run(Test3DScene)
 
 
 if __name__ == "__main__":

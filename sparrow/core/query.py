@@ -4,6 +4,7 @@ import numpy as np
 
 from sparrow.core.batch_view import BatchView
 from sparrow.core.world import World
+from sparrow.types import EntityId
 
 T1 = TypeVar("T1")
 
@@ -15,7 +16,7 @@ class Query(Generic[T1]):
 
     def __iter__(
         self,
-    ) -> Iterator[Tuple[int, Tuple[Any, ...]]]:
+    ) -> Iterator[Tuple[EntityId, Tuple[Any, ...]]]:
         """
         Yields: (count, (array1, array2...))
         """

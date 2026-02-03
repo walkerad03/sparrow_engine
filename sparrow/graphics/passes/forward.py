@@ -2,198 +2,125 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Optional
+from typing import Optional
 
 import moderngl
-import numpy as np
 
-from sparrow.graphics.ecs.frame_submit import LightPoint
 from sparrow.graphics.graph.pass_base import (
     PassBuildInfo,
     PassExecutionContext,
-    PassFeatures,
     PassResourceUse,
     RenderPass,
     RenderServices,
 )
-from sparrow.graphics.graph.resources import (
-    FramebufferResource,
-    GraphResource,
-    expect_resource,
-)
-from sparrow.graphics.renderer.settings import ForwardRendererSettings
-from sparrow.graphics.shaders.program_types import ShaderStages
-from sparrow.graphics.shaders.shader_manager import ShaderRequest
-from sparrow.graphics.util.ids import (
-    MaterialId,
-    MeshId,
-    PassId,
-    ResourceId,
-    ShaderId,
-)
+from sparrow.graphics.utils.ids import ResourceId
+from sparrow.graphics.utils.uniforms import set_uniform
 
 
-@dataclass(kw_only=True)
-class ForwardPass(RenderPass):
-    pass_id: PassId
-    settings: ForwardRendererSettings
+@dataclass
+class ForwardPBRPass(RenderPass):
+    """
+    Standard Forward Rendering Pass.
+    Draws all opaque objects in the RenderFrame.
+    """
 
-    albedo_tex: ResourceId
-    depth_tex: ResourceId
+    target: Optional[ResourceId] = None
 
-    features: PassFeatures = PassFeatures.CAMERA
-
-    _u_model: moderngl.Uniform | None = None
-    _u_light_color: moderngl.Uniform | None = None
-    _u_light_pos: moderngl.Uniform | None = None
-
-    _u_mat_albedo: moderngl.Uniform | None = None
-    _u_mat_roughness: moderngl.Uniform | None = None
-    _u_mat_metallic: moderngl.Uniform | None = None
-
-    @property
-    def output_target(self) -> Optional[ResourceId]:
-        return self.albedo_tex
+    _program: moderngl.Program | None = None
 
     def build(self) -> PassBuildInfo:
-        writes = [
-            PassResourceUse(
-                resource=self.depth_tex,
-                access="write",
-                stage="depth",
-                binding=0,
-            )
-        ]
+        writes = []
+        if self.target:
+            writes.append(PassResourceUse(self.target, "write"))
 
-        if self.output_target:
-            writes.append(
-                PassResourceUse(
-                    resource=self.output_target,
-                    access="write",
-                    stage="color",
-                    binding=0,
-                )
-            )
         return PassBuildInfo(
             pass_id=self.pass_id,
-            name="Forward",
             reads=[],
             writes=writes,
         )
 
-    def on_graph_compiled(
-        self,
-        *,
-        ctx: moderngl.Context,
-        resources: Mapping[ResourceId, GraphResource[object]],
-        services: RenderServices,
+    def on_compile(
+        self, ctx: moderngl.Context, services: RenderServices
     ) -> None:
-        req = ShaderRequest(
-            shader_id=ShaderId("forward_pbr"),
-            stages=ShaderStages(
-                vertex="sparrow/graphics/shaders/default/forward.vert",
-                fragment="sparrow/graphics/shaders/default/forward.frag",
-            ),
-            label="Forward",
-        )
-        prog = services.shader_manager.get(req).program
-        if isinstance(prog, moderngl.ComputeShader):
-            raise RuntimeError(
-                "ForwardPass requires a graphics Program, not a ComputeShader"
-            )
+        vs = """
+        #version 330 core
+        uniform mat4 u_view_proj;
+        uniform mat4 u_model;
 
-        self._u_model: moderngl.Uniform = prog.get("u_model", None)
-        self._u_light_color: moderngl.Uniform = prog.get("u_light_color", None)
-        self._u_light_pos: moderngl.Uniform = prog.get("u_light_pos", None)
+        layout (location = 0) in vec3 in_pos;
+        layout (location = 1) in vec3 in_normal;
+        layout (location = 2) in vec2 in_uv;
 
-        self._u_mat_albedo: moderngl.Uniform = prog.get(
-            "u_material.albedo", None
-        )
-        self._u_mat_roughness: moderngl.Uniform = prog.get(
-            "u_material.roughness", None
-        )
-        self._u_mat_metallic: moderngl.Uniform = prog.get(
-            "u_material.metallic", None
-        )
+        out vec3 v_normal;
+        out vec2 v_uv;
 
-        self._program = prog
-        super().on_graph_compiled(
-            ctx=ctx, resources=resources, services=services
-        )
+        void main() {
+            v_normal = in_normal;
+            v_uv = in_uv;
+            gl_Position = u_view_proj * u_model * vec4(in_pos, 1.0);
+        }
+        """
 
-    def execute(self, exec_ctx: PassExecutionContext) -> None:
-        self.execute_base(exec_ctx)
+        fs = """
+        #version 330 core
+        uniform vec3 u_color;
 
-        gl = exec_ctx.gl
-        services = exec_ctx.services
+        in vec3 v_normal;
+        in vec2 v_uv;
+        out vec4 fragColor;
 
-        if self.output_target:
-            fbo_res = expect_resource(
-                exec_ctx.resources, self.output_fbo_id, FramebufferResource
-            )
-            fbo = fbo_res.handle
-            fbo.use()
+        void main() {
+            // Simple Debug Lighting (N dot L)
+            vec3 L = normalize(vec3(0.5, 1.0, 0.5));
+            float NdotL = max(dot(normalize(v_normal), L), 0.1);
+            vec3 uv_tint = vec3(v_uv, 0.0) * 0.0001;
+            fragColor = vec4(u_color * NdotL + uv_tint, 1.0);
+        }
+        """
+        self._program = services.shader_manager.get_program(vs, fs)
+
+    def execute(self, ctx: PassExecutionContext) -> None:
+        if not self._program:
+            return
+
+        gl = ctx.gl
+        frame = ctx.frame
+
+        if self.target:
+            ctx.graph_resources[self.target].use()
         else:
             gl.screen.use()
 
-        gl.viewport = (0, 0, exec_ctx.viewport_width, exec_ctx.viewport_height)
-
         gl.enable(moderngl.DEPTH_TEST)
-        gl.clear()
+        gl.enable(moderngl.CULL_FACE)
 
-        assert isinstance(self._program, moderngl.Program)
-        assert self._u_model
+        # TODO: Use UBOs
+        set_uniform(
+            self._program,
+            "u_view_proj",
+            frame.camera.view_proj.T.tobytes(),
+        )
 
-        light_color = (0.0, 0.0, 0.0)
-        light_pos = (0.0, 0.0, 0.0)
-        if exec_ctx.frame.point_lights:
-            li: LightPoint = exec_ctx.frame.point_lights[0]
-            light_color = (
-                li.color_rgb[0],
-                li.color_rgb[1],
-                li.color_rgb[2],
+        for obj in frame.objects:
+            gpu_mesh = ctx.gpu_resources.get_mesh(obj.mesh_id)
+            if not gpu_mesh:
+                continue
+
+            set_uniform(
+                self._program,
+                "u_model",
+                obj.transform.T.astype("f4").tobytes(),
             )
-            light_pos = (
-                li.position_ws[0],
-                li.position_ws[1],
-                li.position_ws[2],
+
+            set_uniform(
+                self._program,
+                "u_color",
+                obj.color[:3],
             )
-            light_intensity: float = li.intensity
 
-        if self._u_light_color:
-            self._u_light_color.value = [
-                c * light_intensity for c in light_color
-            ]
-
-        if self._u_light_pos:
-            self._u_light_pos.value = light_pos
-
-        for draw in exec_ctx.frame.draws:
-            mesh_id = MeshId(draw.mesh_id)
-            material_id = MaterialId(draw.material_id)
-            material = services.material_manager.get(material_id)
-
-            self._u_model.write(draw.model.astype(np.float32).T.tobytes())
-
-            if self._u_mat_albedo is not None:
-                color = getattr(material, "albedo", (1.0, 1.0, 1.0))
-                self._u_mat_albedo.value = color
-            if self._u_mat_roughness:
-                self._u_mat_roughness.value = getattr(
-                    material, "roughness", 0.5
+            if not gpu_mesh._default_vao:
+                gpu_mesh.create_default_vao(
+                    self._program, "3f 3f 2f", ["in_pos", "in_normal", "in_uv"]
                 )
 
-            if self._u_mat_metallic:
-                self._u_mat_metallic.value = getattr(material, "metallic", 0.0)
-
-            vao = services.mesh_manager.vao_for(mesh_id, self._program)
-            vao.render()
-
-    def on_graph_destroyed(self) -> None:
-        self._program = None
-        self._u_model = None
-        self._u_light_color = None
-        self._u_light_pos = None
-        self._u_mat_albedo = None
-        self._u_mat_roughness = None
-        self._u_mat_metallic = None
+            gpu_mesh.render()
