@@ -17,7 +17,6 @@ from sparrow.graphics.integration.frame import (
 )
 from sparrow.math import create_perspective_projection, create_view_matrix
 from sparrow.resources.core import SimulationTime
-from sparrow.types import Quaternion
 
 
 def extract_render_frame_system(world: World) -> None:
@@ -34,6 +33,17 @@ def extract_render_frame_system(world: World) -> None:
     camera_data = _extract_active_camera(world)
     sun_dir, sun_col = _extract_sun(world)
     objects = []
+    total_visible = 0
+
+    for count, (trans_view, mesh_view, eids_view) in Query(
+        world, Transform, Mesh, EID
+    ):
+        m_vis = mesh_view.visible
+        if count > 0:
+            total_visible += int(m_vis[:count].sum())
+
+    transforms = np.empty((total_visible, 4, 4), dtype="f4")
+    transform_index = 0
 
     for count, (trans_view, mesh_view, eids_view) in Query(
         world, Transform, Mesh, EID
@@ -50,43 +60,85 @@ def extract_render_frame_system(world: World) -> None:
             if not m_vis[i]:
                 continue
 
-            # Compute Transform
-            model_mat = _compute_model_matrix_single(
-                positions[i], rotations[i], scales[i]
+            # Compute Transform in-place
+            _write_model_matrix(
+                transforms[transform_index],
+                positions[i],
+                rotations[i],
+                scales[i],
             )
 
             objects.append(
                 ObjectInstance(
                     entity_id=eids[i],
                     mesh_id=m_handles[i].id,
-                    transform=model_mat,
+                    transform_index=transform_index,
                     albedo_id=None,
                     color=(1.0, 0.5, 0.2, 1.0),
                     roughness=0.5,
                     metallic=0.0,
                 )
             )
+            transform_index += 1
 
-        frame = RenderFrame(
-            camera=camera_data,
-            objects=objects,
-            sun_direction=sun_dir,
-            sun_color=sun_col,
-            time=time_s,
-            delta_time=dt,
-        )
-        world.add_resource(frame)
+    frame = RenderFrame(
+        camera=camera_data,
+        objects=objects,
+        transforms=transforms,
+        sun_direction=sun_dir,
+        sun_color=sun_col,
+        time=time_s,
+        delta_time=dt,
+    )
+    world.add_resource(frame)
 
 
-def _compute_model_matrix_single(pos, rot, scale) -> np.ndarray:
-    """Helper to build 4x4 matrix from single PRS."""
-    T = np.eye(4, dtype="f4")
-    T[:3, 3] = pos
+def _write_model_matrix(out: np.ndarray, pos, rot, scale) -> None:
+    """Write a 4x4 model matrix into `out` from single PRS."""
+    x, y, z, w = rot
+    n = (x * x + y * y + z * z + w * w) ** 0.5
+    if n == 0.0:
+        x = y = z = 0.0
+        w = 1.0
+    else:
+        inv = 1.0 / n
+        x *= inv
+        y *= inv
+        z *= inv
+        w *= inv
 
-    R = Quaternion(*rot).to_matrix4()
-    S = np.diag([scale[0], scale[1], scale[2], 1.0]).astype("f4")
+    xx = x * x
+    yy = y * y
+    zz = z * z
+    xy = x * y
+    xz = x * z
+    yz = y * z
+    wx = w * x
+    wy = w * y
+    wz = w * z
 
-    return T @ R @ S
+    sx, sy, sz = scale
+
+    # Row-major 3x3 rotation, scaled by S on the right (column scale)
+    out[0, 0] = (1.0 - 2.0 * (yy + zz)) * sx
+    out[0, 1] = (2.0 * (xy - wz)) * sy
+    out[0, 2] = (2.0 * (xz + wy)) * sz
+    out[0, 3] = pos[0]
+
+    out[1, 0] = (2.0 * (xy + wz)) * sx
+    out[1, 1] = (1.0 - 2.0 * (xx + zz)) * sy
+    out[1, 2] = (2.0 * (yz - wx)) * sz
+    out[1, 3] = pos[1]
+
+    out[2, 0] = (2.0 * (xz - wy)) * sx
+    out[2, 1] = (2.0 * (yz + wx)) * sy
+    out[2, 2] = (1.0 - 2.0 * (xx + yy)) * sz
+    out[2, 3] = pos[2]
+
+    out[3, 0] = 0.0
+    out[3, 1] = 0.0
+    out[3, 2] = 0.0
+    out[3, 3] = 1.0
 
 
 def _extract_active_camera(world: World) -> CameraData:

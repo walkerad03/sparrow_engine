@@ -90,7 +90,7 @@ class ForwardPBRPass(RenderPass):
             if not gpu_mesh:
                 continue
 
-            self._batcher.prepare_instance_data(instances)
+            self._batcher.prepare_instance_data(instances, ctx.frame.transforms)
 
             vao = gpu_mesh.get_instanced_vao(program, self._batcher.buffer)
             vao.render(instances=len(instances))

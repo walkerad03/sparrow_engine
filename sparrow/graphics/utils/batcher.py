@@ -37,7 +37,9 @@ class RenderBatcher:
             batches[obj.mesh_id].append(obj)
         return batches
 
-    def prepare_instance_data(self, instances: List[ObjectInstance]) -> None:
+    def prepare_instance_data(
+        self, instances: List[ObjectInstance], transforms: np.ndarray
+    ) -> None:
         """Pack instance data into the GPU buffer."""
         count = len(instances)
         if count == 0:
@@ -49,7 +51,9 @@ class RenderBatcher:
         # TODO: Make ObjectInstance store precomputed numpy array
         for i, obj in enumerate(instances):
             # Model Matrix (column major)
-            self._cpu_buffer[i, 0:16] = obj.transform.T.reshape(16)
+            self._cpu_buffer[i, 0:16] = (
+                transforms[obj.transform_index].T.reshape(16)
+            )
             # Color (RGBA)
             self._cpu_buffer[i, 16] = obj.color[0]
             self._cpu_buffer[i, 17] = obj.color[1]

@@ -25,7 +25,7 @@ class ObjectInstance:
 
     entity_id: EntityId
     mesh_id: AssetId
-    transform: np.ndarray  # 4x4 Model Matrix
+    transform_index: int  # Index into RenderFrame.transforms
     # Material data could be an ID or direct properties
     albedo_id: AssetId | None
     color: Color4
@@ -43,6 +43,9 @@ class RenderFrame:
 
     # Flattened lists for iteration
     objects: List[ObjectInstance] = field(default_factory=list)
+    transforms: np.ndarray = field(
+        default_factory=lambda: np.zeros((0, 4, 4), dtype="f4")
+    )
 
     # Lighting info
     sun_direction: Vector3 = Vector3(0.0, -1.0, 0.0)
