@@ -20,6 +20,7 @@ class TextureDesc:
 
     # If explicit size is None, use this scale factor relative to screen
     size_scale: float = 1.0
+    is_depth: bool = False
 
 
 @dataclass(frozen=True)

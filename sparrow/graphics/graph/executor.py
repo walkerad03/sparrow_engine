@@ -82,7 +82,13 @@ class GraphExecutor:
 
             # Simple wrapper mapping definition strings to ModernGL calls
             # TODO: handle MSAA and dtype parsing here.
-            tex = self.ctx.texture((w, h), desc.components, dtype=desc.dtype)
+            if desc.is_depth:
+                tex = self.ctx.depth_texture((w, h))
+            else:
+                tex = self.ctx.texture(
+                    (w, h), desc.components, dtype=desc.dtype
+                )
+
             self._textures[rid] = tex
 
         for rid, desc in self._buf_defs.items():

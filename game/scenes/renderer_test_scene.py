@@ -1,4 +1,8 @@
 # game/scenes/renderer_test_scene.py
+
+import numpy as np
+import pygame
+
 from sparrow.assets import AssetServer, DefaultMeshes
 from sparrow.core.components import Transform
 from sparrow.core.query import Query
@@ -23,7 +27,8 @@ def rotation_system(world: World) -> None:
     t = sim.elapsed_seconds if sim else 0.0
 
     for count, (trans_view, mesh_view) in Query(world, Transform, Mesh):
-        trans_view.rot[:] = Quaternion.from_euler(t, 0, 0)
+        trans_view.rot[:] = Quaternion.from_euler(t * 32, 0, 0)
+        trans_view.pos.y[:] = np.sin(t * 10) * 0.5
 
 
 class Test3DScene(Scene):
@@ -40,18 +45,13 @@ class Test3DScene(Scene):
 
         mesh_handle = self.app.asset_server.load(DefaultMeshes.BUNNY)
 
-        for x in range(1, 1000):
-            pos = Vector3(
-                x % 10 - 5,
-                x // 10 % 10 - 5,
-                x // 100 % 10 - 5,
-            )
-
-            self.world.create_entity(
-                Transform(pos=pos),
-                Mesh(handle=mesh_handle),
-                Material(base_color=(1.0, 0.5, 0.2, 1.0)),
-            )
+        for x in range(-20, 22, 2):
+            for z in range(-80, 20, 2):
+                self.world.create_entity(
+                    Transform(pos=Vector3(x, 0.0, z - 5)),
+                    Mesh(handle=mesh_handle),
+                    Material(base_color=(1.0, 0.5, 0.2, 1.0)),
+                )
 
         self.world.create_entity(
             Transform(
@@ -69,6 +69,12 @@ class Test3DScene(Scene):
         self.scheduler.add_system(Stage.UPDATE, rotation_system)
 
         super().on_start()
+
+        pygame.mixer.init()
+
+        song = pygame.mixer.Sound(file="oiia.mp3")
+        song.set_volume(1)
+        song.play(loops=True)
 
     def on_update(self):
         super().on_update()
