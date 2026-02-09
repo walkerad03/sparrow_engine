@@ -1,10 +1,12 @@
 # sparrow/core/application.py
 from dataclasses import replace
+from pathlib import Path
 from typing import Optional, Type
 
 import moderngl
 import pygame
 
+from sparrow.assets import AssetServer
 from sparrow.core.scene import Scene
 from sparrow.core.timing import FixedStep
 from sparrow.input.handler import InputHandler
@@ -14,12 +16,19 @@ from sparrow.resources.rendering import RenderContext, RenderViewport
 
 class Application:
     def __init__(
-        self, width: int = 1920, height: int = 1080, title: str = "Sparrow"
+        self,
+        width: int = 1920,
+        height: int = 1080,
+        title: str = "Sparrow",
+        asset_root: Path = Path(".") / "sparrow" / "assets",
     ):
         self.screen_size = (width, height)
         self.window: pygame.Surface | None = None
         self.ctx: moderngl.Context | None = None
         self._title = title
+
+        self.asset_server = AssetServer(asset_root=asset_root)
+
         self.clock: pygame.time.Clock | None = None
         self._pygame_initialized = False
         self.timer = FixedStep(target_fps=60)
@@ -83,7 +92,11 @@ class Application:
             if self.active_scene:
                 steps = self.timer.advance()
 
-                sim_time = self.active_scene.world.get_resource(SimulationTime)
+                sim_time = self.active_scene.world.try_resource(SimulationTime)
+                if not sim_time:
+                    # Fallback if resource accidentally removed
+                    sim_time = SimulationTime()
+                    self.active_scene.world.add_resource(sim_time)
 
                 for _ in range(steps):
                     scaled_dt = self.timer.dt * sim_time.time_scale
@@ -117,9 +130,9 @@ class Application:
             self._ensure_window()
             assert self.ctx is not None
             w, h = self.screen_size
+            self.active_scene.world.add_resource(RenderContext(gl=self.ctx))
+            self.active_scene.world.add_resource(self.asset_server)
             self.active_scene.world.add_resource(
                 RenderViewport(width=w, height=h)
             )
-            self.active_scene.world.add_resource(RenderContext(gl=self.ctx))
-            self.active_scene.configure_rendering()
         self.active_scene.on_start()

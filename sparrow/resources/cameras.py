@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from sparrow.graphics.ecs.frame_submit import CameraData
+from sparrow.graphics.integration.frame import CameraData
 
 
 @dataclass(frozen=True)

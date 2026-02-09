@@ -43,7 +43,8 @@ class Scheduler:
                 "Cannot add systems after scheduler is compiled."
             )
 
-        sys_name = name or SystemId(system.__name__)
+        name_attr = getattr(system, "__name__")
+        sys_name = name or SystemId(name_attr)
 
         before_deps = [before] if isinstance(before, str) else (before or [])
         after_deps = [after] if isinstance(after, str) else (after or [])

@@ -21,6 +21,10 @@ Scalar: TypeAlias = float
 
 Color: TypeAlias = Tuple[Scalar, Scalar, Scalar, Scalar]
 
+# TODO: Replace with dataclasses
+Color3: TypeAlias = Tuple[Scalar, Scalar, Scalar]
+Color4: TypeAlias = Tuple[Scalar, Scalar, Scalar, Scalar]
+
 
 @dataclass(frozen=True, slots=True)
 class Vector2:

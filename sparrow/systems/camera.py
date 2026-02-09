@@ -4,16 +4,18 @@ from dataclasses import replace
 
 import numpy as np
 
-from sparrow.core.components import Camera, Camera2D, Transform
+from sparrow.core.components import Camera2D, Transform
 from sparrow.core.world import World
-from sparrow.graphics.ecs.frame_submit import CameraData
+from sparrow.graphics.integration.components import Camera
+from sparrow.graphics.integration.frame import CameraData
 from sparrow.resources.cameras import CameraOutput
 
 
 def camera_system(world: World) -> None:
     camera_out = world.try_resource(CameraOutput)
     if camera_out is None:
-        return
+        camera_out = CameraOutput()
+        world.add_resource(camera_out)
 
     new_cam_data = None
 
@@ -103,7 +105,7 @@ def _calculate_camera_3d(camera: Camera, transform: Transform) -> CameraData:
         view=view,
         proj=proj,
         view_proj=view_proj,
-        position_ws=pos_ws,
+        position=pos_ws,
         near=camera.near_clip,
         far=camera.far_clip,
     )
@@ -160,7 +162,7 @@ def _calculate_camera_2d(camera: Camera2D, transform: Transform) -> CameraData:
         view=view,
         proj=proj,
         view_proj=view_proj,
-        position_ws=pos_ws,
+        position=pos_ws,
         near=camera.near_clip,
         far=camera.far_clip,
     )
