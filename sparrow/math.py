@@ -147,7 +147,12 @@ def quaternion_to_matrix(q: Union[Quaternion, np.ndarray, list]) -> np.ndarray:
     Converts a single quaternion into a 4x4 Rotation Matrix.
     q: Quaternion object (x,y,z,w) or array-like [x,y,z,w].
     """
-    if hasattr(q, "x"):
+    if (
+        hasattr(q, "x")
+        and hasattr(q, "y")
+        and hasattr(q, "z")
+        and hasattr(q, "w")
+    ):
         x, y, z, w = q.x, q.y, q.z, q.w
     else:
         x, y, z, w = q[0], q[1], q[2], q[3]
@@ -156,19 +161,27 @@ def quaternion_to_matrix(q: Union[Quaternion, np.ndarray, list]) -> np.ndarray:
     xy, xz, yz = x * y, x * z, y * z
     wx, wy, wz = w * x, w * y, w * z
 
-    mat = np.eye(4, dtype=np.float32)
+    mat = np.empty((4, 4), dtype=np.float32)
 
     mat[0, 0] = 1.0 - 2.0 * (yy + zz)
     mat[0, 1] = 2.0 * (xy - wz)
     mat[0, 2] = 2.0 * (xz + wy)
+    mat[0, 3] = 0
 
     mat[1, 0] = 2.0 * (xy + wz)
     mat[1, 1] = 1.0 - 2.0 * (xx + zz)
     mat[1, 2] = 2.0 * (yz - wx)
+    mat[1, 3] = 0
 
     mat[2, 0] = 2.0 * (xz - wy)
     mat[2, 1] = 2.0 * (yz + wx)
     mat[2, 2] = 1.0 - 2.0 * (xx + yy)
+    mat[2, 3] = 0
+
+    mat[3, 0] = 0.0
+    mat[3, 1] = 0.0
+    mat[3, 2] = 0.0
+    mat[3, 3] = 1.0
 
     return mat
 
@@ -180,21 +193,50 @@ def create_view_matrix(
     Constructs a View Matrix (World -> Camera Space)  from a position and rotation.
     This effectively applies the inverse of the Camera's Model Matrix.
     """
-    # 1. Get Rotation Matrix (Camera -> World orientation)
-    R = quaternion_to_matrix(rot)
+    if hasattr(rot, "x"):
+        x, y, z, w = rot.x, rot.y, rot.z, rot.w
+    else:
+        x, y, z, w = rot[0], rot[1], rot[2], rot[3]
 
-    # 2. Transpose R to get Inverse Rotation (World -> Camera)
-    # (Since rotation matrices are orthogonal, R^-1 == R.T)
-    R_inv = R.T
+    xx, yy, zz = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
 
-    # 3. Create Inverse Translation Matrix (Move world by -pos)
-    T_inv = np.eye(4, dtype=np.float32)
-    T_inv[:3, 3] = -np.array(pos, dtype=np.float32)
+    # Camera->world rotation entries
+    r00 = 1.0 - 2.0 * (yy + zz)
+    r01 = 2.0 * (xy - wz)
+    r02 = 2.0 * (xz + wy)
+    r10 = 2.0 * (xy + wz)
+    r11 = 1.0 - 2.0 * (xx + zz)
+    r12 = 2.0 * (yz - wx)
+    r20 = 2.0 * (xz - wy)
+    r21 = 2.0 * (yz + wx)
+    r22 = 1.0 - 2.0 * (xx + yy)
 
-    # 4. View = R_inv * T_inv
-    # We apply translation first (relative to world), then rotation.
-    # Mathematically: (T * R)^-1 = R^-1 * T^-1
-    return R_inv @ T_inv
+    px = float(pos[0])
+    py = float(pos[1])
+    pz = float(pos[2])
+
+    # view = [R^T, -R^T * p]
+    view = np.empty((4, 4), dtype=np.float32)
+
+    view[0, 0] = r00
+    view[0, 1] = r10
+    view[0, 2] = r20
+    view[0, 3] = -(r00 * px + r10 * py + r20 * pz)
+    view[1, 0] = r01
+    view[1, 1] = r11
+    view[1, 2] = r21
+    view[1, 3] = -(r01 * px + r11 * py + r21 * pz)
+    view[2, 0] = r02
+    view[2, 1] = r12
+    view[2, 2] = r22
+    view[2, 3] = -(r02 * px + r12 * py + r22 * pz)
+    view[3, 0] = 0.0
+    view[3, 1] = 0.0
+    view[3, 2] = 0.0
+    view[3, 3] = 1.0
+    return view
 
 
 def create_perspective_projection(

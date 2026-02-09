@@ -51,6 +51,11 @@ class ForwardPBRPass(RenderPass):
         self._vs_handle = self._asset_server.load(DefaultShaders.FORWARD_VS)
         self._fs_handle = self._asset_server.load(DefaultShaders.FORWARD_FS)
 
+    def on_destroy(self) -> None:
+        if self._batcher:
+            self._batcher.release()
+            self._batcher = None
+
     def execute(self, ctx: PassExecutionContext) -> None:
         assert (
             self._shader_manager

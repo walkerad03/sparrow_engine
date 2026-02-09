@@ -55,6 +55,14 @@ class TonemapPass(RenderPass):
 
         self._triangle_buffer = create_fullscreen_triangle(ctx)
 
+    def on_destroy(self) -> None:
+        if self._vao:
+            self._vao.release()
+            self._vao = None
+        if self._triangle_buffer:
+            self._triangle_buffer.release()
+            self._triangle_buffer = None
+
     def execute(self, ctx: PassExecutionContext) -> None:
         assert (
             self._shader_manager

@@ -110,6 +110,9 @@ class GraphExecutor:
 
     def destroy(self) -> None:
         """Cleanup GPU resources."""
+        for p in self.passes:
+            p.on_destroy()
+
         for t in self._textures.values():
             t.release()
         for b in self._buffers.values():
@@ -120,3 +123,4 @@ class GraphExecutor:
         self._textures.clear()
         self._buffers.clear()
         self._framebuffers.clear()
+        self.passes.clear()

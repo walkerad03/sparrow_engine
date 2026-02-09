@@ -108,3 +108,10 @@ class RenderPass(ABC):
     def on_resize(self, width: int, height: int) -> None:
         """Called when pipeline resolution changes."""
         pass
+
+    def on_destroy(self) -> None:
+        """
+        Called before graph teardown.
+         release pass-owned GPU resources.
+        """
+        pass
