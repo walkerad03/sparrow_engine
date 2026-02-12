@@ -23,7 +23,7 @@ def extract_render_frame_system(world: World) -> None:
     """
     System: Queries the ECS and constructs a RenderFrame snapshot.
     """
-    sim_time = world.try_resource(SimulationTime)
+    sim_time = world.resource_get(SimulationTime)
 
     if not sim_time:
         return
@@ -90,7 +90,7 @@ def extract_render_frame_system(world: World) -> None:
         time=time_s,
         delta_time=dt,
     )
-    world.add_resource(frame)
+    world.resource_add(frame)
 
 
 def _write_model_matrix(out: np.ndarray, pos, rot, scale) -> None:

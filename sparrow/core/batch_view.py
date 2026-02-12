@@ -1,6 +1,39 @@
 import numpy as np
 
 
+class ArrayView:
+    __slots__ = ("_data",)
+
+    def __init__(self, data: np.ndarray):
+        self._data = data
+
+    def col(self, index: int):
+        """Accesses a specific column (e.g., X or Y) as a new view."""
+        return ArrayView(self._data[:, index])
+
+    def __add__(self, other):
+        val = other._data if isinstance(other, ArrayView) else other
+        return ArrayView(self._data + val)
+
+    def __iadd__(self, other):
+        val = other._data if isinstance(other, ArrayView) else other
+        self._data += val
+        return self
+
+    def __mul__(self, other):
+        val = other._data if isinstance(other, ArrayView) else other
+        return ArrayView(self._data * val)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __getitem__(self, key):
+        return ArrayView(self._data[key])
+
+
 class VectorView:
     """
     A mutable view into the columns of a Structured Array.
@@ -66,25 +99,11 @@ class BatchView:
     def __init__(self, data: np.ndarray):
         self._data = data
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> ArrayView:
         try:
-            field = self._data[name]
+            return ArrayView(self._data[name])
         except KeyError:
-            raise AttributeError(f"Component batch has no field '{name}'")
-
-        # If the field is a 2D array (N, M), wrap it in a VectorView
-        if field.ndim == 2 and field.shape[1] in (2, 3, 4):
-            return VectorView(field)
-
-        # Otherwise return the raw array (for scalars like 'duration')
-        return field
-
-    def __getitem__(self, key):
-        """
-        Allows direct access to the underlying array rows.
-        Essential for iterating IDs: eids[i]
-        """
-        return self._data[key]
+            raise AttributeError(f"Field '{name}' not found.")
 
     def __len__(self):
         return len(self._data)

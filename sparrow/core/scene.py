@@ -48,13 +48,13 @@ class Scene:
         self._setup_input()
 
         if renderer_settings:
-            self.world.add_resource(renderer_settings)
+            self.world.resource_add(renderer_settings)
         else:
-            self.world.add_resource(RendererSettings())
+            self.world.resource_add(RendererSettings())
 
     def _setup_input(self):
         input_handler = InputHandler()
-        self.world.add_resource(input_handler)
+        self.world.resource_add(input_handler)
 
         base_ctx = InputContext("default")
         base_ctx.bind(pygame.K_w, "UP")

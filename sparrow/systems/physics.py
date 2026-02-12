@@ -12,17 +12,17 @@ SOLVER_ITERATIONS = 4
 
 
 def physics_system(world: World) -> None:
-    gravity_res = world.try_resource(Gravity)
+    gravity_res = world.resource_get(Gravity)
 
     if not gravity_res:
         gravity_res = Gravity()
-        world.add_resource(gravity_res)
+        world.resource_add(gravity_res)
 
     gravity = gravity_res.acceleration if gravity_res else Vector3(0, -9.81, 0)
     gravity_arr = np.array([gravity.x, gravity.y, gravity.z], dtype=np.float64)
 
     # --- Integration Step ---
-    for count, (bodies, transforms) in world.get_batch(RigidBody, Transform):
+    for count, (bodies, transforms) in world.query(RigidBody, Transform):
         active = bodies["inverse_mass"].reshape(-1) > 0.0
 
         if not np.any(active):
@@ -79,7 +79,7 @@ def physics_system(world: World) -> None:
     dynamics = []
     statics = []
 
-    for count, (bodies, transforms, colliders) in world.get_batch(
+    for count, (bodies, transforms, colliders) in world.query(
         RigidBody, Transform, Collider3D
     ):
         ids = np.arange(count)
