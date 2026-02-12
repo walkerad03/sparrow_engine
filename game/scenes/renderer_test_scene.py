@@ -23,7 +23,7 @@ from sparrow.types import Quaternion, Vector3
 
 def rotation_system(world: World) -> None:
     """Simple system to rotate objects."""
-    sim = world.try_resource(SimulationTime)
+    sim = world.resource_get(SimulationTime)
     t = sim.elapsed_seconds if sim else 0.0
 
     for count, (trans_view, mesh_view) in Query(world, Transform, Mesh):
@@ -35,8 +35,8 @@ class Test3DScene(Scene):
     def on_start(self):
         print("Starting Test 3D Scene...")
 
-        if not self.world.try_resource(AssetServer):
-            self.world.add_resource(self.app.asset_server)
+        if not self.world.resource_get(AssetServer):
+            self.world.resource_add(self.app.asset_server)
 
         renderer_res = ensure_renderer_resource(self.world)
 
@@ -47,13 +47,13 @@ class Test3DScene(Scene):
 
         for x in range(-20, 22, 2):
             for z in range(-80, 20, 2):
-                self.world.create_entity(
+                self.world.entity_spawn(
                     Transform(pos=Vector3(x, 0.0, z - 5)),
                     Mesh(handle=mesh_handle),
                     Material(base_color=(1.0, 0.5, 0.2, 1.0)),
                 )
 
-        self.world.create_entity(
+        self.world.entity_spawn(
             Transform(
                 pos=Vector3(0, 2, 9),
                 rot=Quaternion(0, 0, 0, 1),
@@ -61,7 +61,7 @@ class Test3DScene(Scene):
             Camera(fov=60.0, near=0.1, far=100.0, active=True),
         )
 
-        self.world.create_entity(
+        self.world.entity_spawn(
             Transform(),
             DirectionalLight(color=(1.0, 0.9, 0.8), intensity=1.5),
         )

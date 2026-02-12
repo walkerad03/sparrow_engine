@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from sparrow.core.components import Camera2D, Transform
+from sparrow.core.components import EID, Camera2D, Transform
 from sparrow.core.world import World
 from sparrow.graphics.integration.components import Camera
 from sparrow.graphics.integration.frame import CameraData
@@ -12,24 +12,35 @@ from sparrow.resources.cameras import CameraOutput
 
 
 def camera_system(world: World) -> None:
-    camera_out = world.try_resource(CameraOutput)
-    if camera_out is None:
+    camera_out = world.resource_get(CameraOutput)
+    if not camera_out:
         camera_out = CameraOutput()
-        world.add_resource(camera_out)
+        world.resource_add(camera_out)
 
     new_cam_data = None
 
-    for _, camera, transform in world.join(Camera, Transform):
-        new_cam_data = _calculate_camera_3d(camera, transform)
+    for count, (cams, transforms, eids) in world.query(Camera, Transform, EID):
+        eid = eids.id[0]
+
+        new_cam_data = _calculate_camera_3d(
+            world.component_get(eid, Camera, exception_on_fail=True),
+            world.component_get(eid, Transform, exception_on_fail=True),
+        )
         break
 
     if new_cam_data is None:
-        for _, camera_2d, transform in world.join(Camera2D, Transform):
-            new_cam_data = _calculate_camera_2d(camera_2d, transform)
+        for count, (camera_2d, transforms, eids) in world.query(
+            Camera2D, Transform, EID
+        ):
+            eid = eids.id[0]
+            new_cam_data = _calculate_camera_2d(
+                world.component_get(eid, Camera2D, exception_on_fail=True),
+                world.component_get(eid, Transform, exception_on_fail=True),
+            )
             break
 
     if new_cam_data:
-        world.mutate_resource(replace(camera_out, active=new_cam_data))
+        world.resource_set(replace(camera_out, active=new_cam_data))
 
 
 def _calculate_camera_3d(camera: Camera, transform: Transform) -> CameraData:

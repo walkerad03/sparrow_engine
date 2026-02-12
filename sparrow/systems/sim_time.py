@@ -3,5 +3,5 @@ from sparrow.resources.core import SimulationTime
 
 
 def simulation_time_system(world: World) -> None:
-    if not world.try_resource(SimulationTime):
-        world.add_resource(SimulationTime())
+    if not world.resource_get(SimulationTime):
+        world.resource_add(SimulationTime())

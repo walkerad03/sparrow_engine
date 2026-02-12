@@ -5,12 +5,14 @@ from typing import (
     Dict,
     Iterator,
     List,
+    Literal,
     Optional,
     Tuple,
     Type,
     TypeVar,
     TypeVarTuple,
     Unpack,
+    overload,
 )
 
 import numpy as np
@@ -18,6 +20,7 @@ import numpy as np
 from sparrow.core.archetype import Archetype
 from sparrow.core.components import EID
 from sparrow.core.events import EventManager
+from sparrow.core.query import Query
 from sparrow.core.registry import ComponentRegistry
 from sparrow.core.resources import ResourceManager
 from sparrow.types import ArchetypeMask, EntityId, Quaternion, Vector2, Vector3
@@ -52,19 +55,23 @@ class World:
         self._get_or_create_archetype(ArchetypeMask(0), [])
 
     # RESOURCE MANAGEMENT
-    def add_resource(self, resource: Any) -> None:
+    def resource_add(self, resource: Any) -> None:
         """Register a global resource (e.g. Time, Input, Config)."""
         self._resource_manager.add(resource)
 
-    def get_resource(self, resource_type: Type[T]) -> T:
-        """Retrieve a resource. Raises KeyError if missing."""
-        return self._resource_manager.get(resource_type)
+    def resource_get(
+        self,
+        resource_type: Type[T],
+        exception_on_fail: bool = False,
+    ) -> T | None:
+        """Retrieve a resource.
 
-    def try_resource(self, resource_type: Type[T]) -> T | None:
-        """Retrieve a resource or returns None."""
+        If `exception_on_fail`, Raise KeyError if missing."""
+        if exception_on_fail:
+            return self._resource_manager.get(resource_type)
         return self._resource_manager.try_get(resource_type)
 
-    def mutate_resource(self, resource_type: Any) -> None:
+    def resource_set(self, resource_type: Any) -> None:
         """Update an EXISTING resource with a new instance."""
         res_type = type(resource_type)
 
@@ -77,17 +84,16 @@ class World:
         self._resource_manager.add(resource_type)
 
     # EVENT MANAGEMENT
-    def emit_event(self, event: Any) -> None:
+    def event_emit(self, event: Any) -> None:
         """Queues an event signal."""
         self._event_manager.emit(event)
 
-    def get_events(self, event_type: Type[Ev]) -> List[Ev]:
+    def event_fetch(self, event_type: Type[Ev]) -> List[Ev]:
         """Consumes and returns all events of the given type."""
         return self._event_manager.get(event_type)
 
     # ENTITY MANAGEMENT
-
-    def create_entity(self, *components: Any) -> EntityId:
+    def entity_spawn(self, *components: Any) -> EntityId:
         """Creates an entity, optionally with starting components."""
         eid = EntityId(self._next_id)
         self._next_id += 1
@@ -96,33 +102,13 @@ class World:
         row = arch.add(eid, {})
         self._entities[eid] = EntityRecord(arch, row)
 
-        self.add_component(eid, EID(eid))
+        self.component_add(eid, EID(eid))
         for c in components:
-            self.add_component(eid, c)
+            self.component_add(eid, c)
 
         return eid
 
-    def add_entity(self, eid: EntityId, *components: Any) -> None:
-        """
-        Manually spawns an entity with a specific ID.
-        Useful for networking (replicating server IDs) or loading saves.
-        """
-        if eid >= self._next_id:
-            self._next_id = eid + 1
-
-        if eid in self._entities:
-            for c in components:
-                self.add_component(eid, c)
-            return
-
-        arch = self._archetypes[ArchetypeMask(0)]
-        row = arch.add(eid, {})
-        self._entities[eid] = EntityRecord(arch, row)
-
-        for c in components:
-            self.add_component(eid, c)
-
-    def delete_entity(self, eid: EntityId) -> None:
+    def entity_rem(self, eid: EntityId) -> None:
         if eid not in self._entities:
             return
 
@@ -135,22 +121,20 @@ class World:
         del self._entities[eid]
 
     # COMPONENT MANAGEMENT
-    def add_component(self, eid: EntityId, component: object) -> None:
+    def component_add(self, eid: EntityId, component: object) -> None:
         record = self._entities[eid]
         old_arch = record.archetype
         comp_type = type(component)
         comp_mask = ComponentRegistry.get_mask(comp_type)
 
         if old_arch.mask & comp_mask:
-            self.mutate_component(eid, component)
+            self.component_set(eid, component)
             return
 
         new_mask = ArchetypeMask(old_arch.mask | comp_mask)
         self._move_entity(eid, record, new_mask, add_component=component)
 
-    def remove_component(
-        self, eid: EntityId, component_type: Type[Any]
-    ) -> None:
+    def component_rem(self, eid: EntityId, component_type: Type[Any]) -> None:
         record = self._entities.get(eid)
         if not record:
             return
@@ -166,7 +150,7 @@ class World:
         new_mask = ArchetypeMask(old_arch.mask & ~comp_mask)
         self._move_entity(eid, record, new_mask, remove_type=component_type)
 
-    def mutate_component(self, eid: EntityId, component: Any) -> None:
+    def component_set(self, eid: EntityId, component: Any) -> None:
         """
         Update an EXISTING component with a new instance.
         """
@@ -200,24 +184,47 @@ class World:
                 "Use world.add() to attach new components."
             )
 
-    def component(self, eid: EntityId, component_type: Type[T]) -> Optional[T]:
+    @overload
+    def component_get(
+        self,
+        eid: EntityId,
+        component_type: Type[T],
+        exception_on_fail: Literal[True],
+    ) -> T: ...
+    @overload
+    def component_get(
+        self,
+        eid: EntityId,
+        component_type: Type[T],
+        exception_on_fail: Literal[False] = False,
+    ) -> Optional[T]: ...
+    def component_get(
+        self,
+        eid: EntityId,
+        component_type: Type[T],
+        exception_on_fail: bool = False,
+    ) -> Optional[T]:
         record = self._entities.get(eid)
-        if not record:
+
+        if record:
+            arch = record.archetype
+            row = record.row
+
+            if component_type in arch.arrays:
+                raw_data = arch.arrays[component_type][row]
+                return self._reconstruct_component(component_type, raw_data)
+
+            if component_type in arch.objects:
+                return arch.objects[component_type][row]
+
+            if exception_on_fail:
+                raise KeyError(
+                    f"Component {getattr(component_type, '__name__')} not found on entity {eid}"
+                )
+
             return None
 
-        arch = record.archetype
-        row = record.row
-
-        if component_type in arch.arrays:
-            raw_data = arch.arrays[component_type][row]
-            return self._reconstruct_component(component_type, raw_data)
-
-        if component_type in arch.objects:
-            return arch.objects[component_type][row]
-
-        return None
-
-    def has(self, eid: EntityId, component_type: Type[Any]) -> bool:
+    def has_component(self, eid: EntityId, component_type: Type[Any]) -> bool:
         record = self._entities.get(eid)
         if not record:
             return False
@@ -277,6 +284,9 @@ class World:
                             arrays.append(arch.objects[t][: arch.count])
 
                     yield (arch.count, arrays)
+
+    def query(self, *component_types: Type[Any]) -> Query:
+        return Query(self, *component_types)
 
     # INTERNAL HELPERS
 

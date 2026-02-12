@@ -1,22 +1,23 @@
-from typing import Any, Generic, Iterator, Tuple, TypeVar
+from __future__ import annotations
+
+from typing import Any, Generic, Iterator, Tuple, Type, TypeVar
 
 import numpy as np
 
 from sparrow.core.batch_view import BatchView
-from sparrow.core.world import World
 from sparrow.types import EntityId
 
 T1 = TypeVar("T1")
 
 
 class Query(Generic[T1]):
-    def __init__(self, world: World, *component_types):
+    def __init__(self, world: "World", *component_types: Type[Any]):
         self.world = world
         self.types = component_types
 
     def __iter__(
         self,
-    ) -> Iterator[Tuple[EntityId, Tuple[Any, ...]]]:
+    ) -> Iterator[Tuple[EntityId, Tuple[BatchView, ...]]]:
         """
         Yields: (count, (array1, array2...))
         """
@@ -25,7 +26,6 @@ class Query(Generic[T1]):
                 continue
 
             views = tuple(BatchView(c) for c in components)
-
             yield count, views
 
     @staticmethod

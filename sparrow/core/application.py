@@ -66,13 +66,13 @@ class Application:
         self.change_scene(start_scene_cls)
         self.running = True
 
-        if self.active_scene and not self.active_scene.world.try_resource(
+        if self.active_scene and not self.active_scene.world.resource_get(
             SimulationTime
         ):
             print(
                 "Warning: SimulationTime missing after Scene start. Creating default."
             )
-            self.active_scene.world.add_resource(SimulationTime())
+            self.active_scene.world.resource_add(SimulationTime())
 
         self.timer.start()
 
@@ -85,18 +85,19 @@ class Application:
                         if event.key == pygame.K_ESCAPE:
                             self.running = False
 
-                    if self.active_scene:
-                        inp = self.active_scene.world.get_resource(InputHandler)
-                        inp.process_event(event)
+                    if self.active_scene and self.active_scene.world:
+                        inp = self.active_scene.world.resource_get(InputHandler)
+                        if inp:
+                            inp.process_event(event)
 
             if self.active_scene:
                 steps = self.timer.advance()
 
-                sim_time = self.active_scene.world.try_resource(SimulationTime)
+                sim_time = self.active_scene.world.resource_get(SimulationTime)
                 if not sim_time:
                     # Fallback if resource accidentally removed
                     sim_time = SimulationTime()
-                    self.active_scene.world.add_resource(sim_time)
+                    self.active_scene.world.resource_add(sim_time)
 
                 for _ in range(steps):
                     scaled_dt = self.timer.dt * sim_time.time_scale
@@ -107,7 +108,7 @@ class Application:
                         delta_seconds=scaled_dt,
                         elapsed_seconds=sim_time.elapsed_seconds + scaled_dt,
                     )
-                    self.active_scene.world.mutate_resource(new_st)
+                    self.active_scene.world.resource_set(new_st)
                     self.active_scene.on_update()
 
                 self.active_scene.on_render()
@@ -130,9 +131,9 @@ class Application:
             self._ensure_window()
             assert self.ctx is not None
             w, h = self.screen_size
-            self.active_scene.world.add_resource(RenderContext(gl=self.ctx))
-            self.active_scene.world.add_resource(self.asset_server)
-            self.active_scene.world.add_resource(
+            self.active_scene.world.resource_add(RenderContext(gl=self.ctx))
+            self.active_scene.world.resource_add(self.asset_server)
+            self.active_scene.world.resource_add(
                 RenderViewport(width=w, height=h)
             )
         self.active_scene.on_start()
