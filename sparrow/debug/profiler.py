@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import cProfile
 import functools
-import io
+import logging
 import pstats
 import sys
+import tracemalloc
 from pathlib import Path
 from typing import Any, Callable, ParamSpec, TypeVar, cast
+
+logger = logging.getLogger("sparrow.profile")
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -37,55 +40,84 @@ def profile(
         @functools.wraps(fn)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             profiler = cProfile.Profile()
+            active_target = target
+            tracemalloc.start()
 
             def dump_stats():
+                current, peak = tracemalloc.get_traced_memory()
+                tracemalloc.stop()
+
                 out_dir.mkdir(parents=True, exist_ok=True)
+                fn_name = cast(Any, fn).__name__
+                base = fn_name
 
-                fn_any = cast(Any, fn)
-                base = fn_any.__name__
-
-                if target:
-                    target_any = cast(Any, target)
-                    base += f"_target_{target_any.__name__}"
+                if active_target is not None:
+                    target_name = getattr(active_target, "__name__", "target")
+                    base = f"{base}_target_{target_name}"
 
                 prof_path = out_dir / f"{base}.prof"
-
                 profiler.dump_stats(prof_path)
-                print(f"[profile] wrote {prof_path}")
 
                 try:
                     stats = pstats.Stats(str(prof_path))
                 except (EOFError, TypeError):
-                    print("[profile] Warning: No data collected.")
+                    logger.warning("No profile data collected.")
                     return
 
-                cmds: list[str] = ["tottime", "cumtime", "calls"]
-                paths: list[Path] = [out_dir / f"{base}.{x}.txt" for x in cmds]
+                for sort_key in ["tottime", "cumtime", "calls"]:
+                    path = out_dir / f"{base}.{sort_key}.txt"
+                    with open(path, "w") as f:
+                        ps = pstats.Stats(str(prof_path), stream=f)
+                        ps.sort_stats(sort_key).print_stats(50)
 
-                for path, cmd in zip(paths, cmds):
-                    buf = io.StringIO()
-                    stats_stream = pstats.Stats(str(prof_path), stream=buf)
-                    stats_stream.sort_stats(cmd).print_stats(30)
-                    path.write_text(buf.getvalue())
-                    print(f"[profile] wrote {path}")
-
-                # FPS Calculation (heuristic uses pygame func calls)
                 frame_count = 0
+                wait_time = 0.0
+
                 internal_stats = getattr(stats, "stats", {})
-                for (_, _, name), (_, nc, _, _, _) in internal_stats.items():
-                    if name in (
-                        "<built-in method pygame.display.flip>",
-                        "<built-in method pygame.display.update>",
-                    ):
+                for (_, _, name), (_, nc, tt, _, _) in internal_stats.items():
+                    if name == "swap_buffers":
                         frame_count += nc
+                        wait_time += tt
 
                 total_time = getattr(stats, "total_tt", 0)
-                fps = frame_count / total_time if total_time > 0 else 0
+                peak_mb = peak / 1024 / 1024
+                net_mb = current / 1024 / 1024
 
-                print(f"[profile] Total Time: {total_time:.4f}s")
+                logger.info("Profiling results for %s:", fn_name)
+                logger.info("  Runtime: %.4fs", total_time)
+                logger.info(
+                    "  Memory: Peak %.2fMB | Net Change %+.2fMB",
+                    peak_mb,
+                    net_mb,
+                )
+
                 if frame_count > 0:
-                    print(f"[profile] Average FPS: {fps:.2f}")
-                print("[profile] profiling complete")
+                    fps = frame_count / total_time
+                    cpu_work_time = total_time - wait_time
+                    avg_work_ms = (cpu_work_time / frame_count) * 1000
+                    wait_percent = (wait_time / total_time) * 100
+                    mem_per_frame_kb = (
+                        (current / frame_count) / 1024 if current > 0 else 0
+                    )
+
+                    logger.info(
+                        "  Performance: %.2f FPS | Work/Frame: %.2fms",
+                        fps,
+                        avg_work_ms,
+                    )
+                    logger.info("  V-Sync Idle: %.1f%%", wait_percent)
+
+                    if mem_per_frame_kb > 0.1:
+                        logger.warning(
+                            "  Frame Leakage detected: ~%.2f KB/frame",
+                            mem_per_frame_kb,
+                        )
+                else:
+                    logger.info(
+                        "  No 'swap_buffers' detected; frame metrics unavailable."
+                    )
+
+                logger.info("Detailed traces saved to: %s", out_dir)
 
             if target is None:
                 profiler.enable()
@@ -96,30 +128,26 @@ def profile(
                     dump_stats()
             else:
                 # Targeted Mode: Patch 'target' to toggle profiler on/off
-                @functools.wraps(target)
-                def target_interceptor(*t_args, **t_kwargs):
+                target_any = cast(Any, target)
+                module = sys.modules[target_any.__module__]
+                qualname = target_any.__qualname__.split(".")
+
+                owner = module
+                for part in qualname[:-1]:
+                    owner = getattr(owner, part)
+
+                method_name = qualname[-1]
+                original_target = getattr(owner, method_name)
+
+                @functools.wraps(original_target)
+                def interceptor(*t_args, **t_kwargs):
                     profiler.enable()
                     try:
                         return original_target(*t_args, **t_kwargs)
                     finally:
                         profiler.disable()
 
-                target_any = cast(Any, target)
-                owner_name = target_any.__module__
-                owner = sys.modules[owner_name]
-                path_parts = target_any.__qualname__.split(".")
-
-                for part in path_parts[:-1]:
-                    owner = getattr(owner, part)
-                method_name = path_parts[-1]
-
-                original_target = getattr(owner, method_name)
-                setattr(owner, method_name, target_interceptor)
-
-                print(
-                    f"[profile] Patching {target_any.__qualname__} for targeted profiling"
-                )
-
+                setattr(owner, method_name, interceptor)
                 try:
                     return fn(*args, **kwargs)
                 finally:
