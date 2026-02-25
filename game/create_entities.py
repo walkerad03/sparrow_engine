@@ -5,21 +5,14 @@ from sparrow.graphics.integration import Mesh
 
 
 def create_entities_system(world: World) -> None:
-    for i in range(100_000):
-        ent = world.entity_add()
-        world.comp_add(
-            ent,
-            Transform(x=i * 10.0, y=0.0),
-            Velocity(dx=1.0),
-        )
-
     asset_server = world.res_get(AssetServer)
     if asset_server:
-        mesh_handle = asset_server.load(DefaultMeshes.BUNNY)
+        mesh_handle = asset_server.load(DefaultMeshes.DRAGON_DECIMATED)
 
     e = world.entity_add()
     world.comp_add(
         e,
         Transform(),
+        Velocity(),
         Mesh(handle=mesh_handle),
     )

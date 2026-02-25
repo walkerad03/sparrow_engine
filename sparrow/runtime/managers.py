@@ -5,6 +5,8 @@ import moderngl
 import moderngl_window as mglw
 from moderngl_window.conf import settings
 
+from sparrow.input.events import KeyEvent, MouseClickEvent, MouseMoveEvent
+
 
 class InterfaceManager:
     """Manages the ModernGL context, window lifecycle, and input collection.
@@ -51,22 +53,21 @@ class InterfaceManager:
 
     def _setup_callbacks(self) -> None:
         """Hooks internal methods to window events for event harvesting."""
-        # TODO: Wrap these in an event dataclass to avoid passing raw objects into ECS
         self.wnd.key_event_func = self._on_key_event
         self.wnd.mouse_position_event_func = self._on_mouse_move
         self.wnd.mouse_press_event_func = self._on_mouse_press
 
     def _on_key_event(self, key: Any, action: Any, modifiers: Any) -> None:
         """Internal callback for keyboard activity."""
-        self._event_buffer.append(("key", key, action, modifiers))
+        self._event_buffer.append(KeyEvent(key, action, modifiers))
 
     def _on_mouse_move(self, x: int, y: int, dx: int, dy: int) -> None:
         """Internal callback for mouse motion."""
-        self._event_buffer.append(("mouse_move", x, y, dx, dy))
+        self._event_buffer.append(MouseMoveEvent(x, y, dx, dy))
 
     def _on_mouse_press(self, x: int, y: int, button: int) -> None:
         """Internal callback for mouse clicks."""
-        self._event_buffer.append(("mouse_click", x, y, button))
+        self._event_buffer.append(MouseClickEvent(x, y, button))
 
     def poll_events(self) -> List[Any]:
         """Harvests and returns all events since the last call.

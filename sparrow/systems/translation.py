@@ -16,6 +16,4 @@ def translation_system(world: World) -> None:
         return
 
     if len(view) > 0:
-        view.Transform.x += view.Velocity.dx * sim_time.fixed_dt
-        view.Transform.y += view.Velocity.dy * sim_time.fixed_dt
-        view.Transform.z += view.Velocity.dz * sim_time.fixed_dt
+        view.Transform.pos += view.Velocity.ds * sim_time.fixed_dt

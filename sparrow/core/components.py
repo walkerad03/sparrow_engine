@@ -20,3 +20,5 @@ class Velocity:
     dx: float = 0.0
     dy: float = 0.0
     dz: float = 0.0
+
+    ds: Vector3 = Vector3(0.0, 0.0, 0.0)
