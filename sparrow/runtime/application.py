@@ -1,12 +1,16 @@
 # sparrow/runtime/application.py
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
 
+from sparrow.core import Scene
 from sparrow.debug.profiler import profile
 from sparrow.ecs.world import World
 from sparrow.runtime.managers import InterfaceManager, ResourceManager
 from sparrow.runtime.timing import FixedStep
+
+logger = logging.getLogger("sparrow.runtime")
 
 
 @dataclass
@@ -65,9 +69,10 @@ class Application:
 
         self.world.res_add(self.interface)
         self.world.res_add(self.resources)
+        self.world.res_add(self.clock)
 
         self.raw_event_buffer: List[Any] = []
-        self._active_scene: Optional[Any] = None
+        self._active_scene: Optional[Scene] = None
 
     def load_scene(self, scene: Any) -> None:
         """Transitions the application to a new scene.
@@ -76,7 +81,7 @@ class Application:
             scene (Any): The scene object containing its own ECS Manager.
         """
         if self._active_scene:
-            self._active_scene.teardown()
+            self._active_scene.teardown(self.world)
             self.resources.unload_unused(self._active_scene.id)
 
         self._active_scene = scene
@@ -93,35 +98,39 @@ class Application:
         self.running = True
         self.clock.start()
 
-        while self.running:
-            self.raw_event_buffer = self.interface.poll_events()
+        logger.info("Starting engine main loop...")
 
-            steps = self.clock.advance()
+        try:
+            while self.running:
+                self.raw_event_buffer = self.interface.poll_events()
 
-            if self._active_scene:
-                for event in self.raw_event_buffer:
-                    self.world.event_add(event)
-                self.raw_event_buffer.clear()
+                steps = self.clock.advance()
 
-                # TODO: Pass clock data into a dedicated time resource
-                # TODO: Update world using scheduler instead of scene
-                for _ in range(steps):
-                    self._active_scene.update_fixed(
-                        self.world,
-                        self.clock.dt,
+                if self._active_scene:
+                    for event in self.raw_event_buffer:
+                        self.world.event_add(event)
+                    self.raw_event_buffer.clear()
+
+                    for _ in range(steps):
+                        self._active_scene.update_fixed(self.world)
+
+                    self.interface.clear(color=(0.1, 0.1, 0.1, 1.0))
+
+                    self._active_scene.update_variable(
+                        self.world, self.clock.alpha
                     )
 
-                self.interface.clear(color=(0.1, 0.1, 0.1, 1.0))
+                    self.interface.swap_buffers()
 
-                self._active_scene.update_variable(
-                    self.world,
-                    self.clock.alpha,
-                )
-
-                self.interface.swap_buffers()
-
-            if self.interface.should_close():
-                self.running = False
+                if self.interface.should_close():
+                    self.running = False
+        except KeyboardInterrupt:
+            logger.info(
+                "External interrupt received. Shutting down application loop."
+            )
+        finally:
+            self.quit()
+            logger.info("Engine shutdown complete.")
 
     def quit(self) -> None:
         """Signals the application loop to terminate."""

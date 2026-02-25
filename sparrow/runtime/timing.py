@@ -1,4 +1,5 @@
 # sparrow/runtime/timing.py
+import time
 from dataclasses import dataclass
 
 import moderngl_window as mglw
@@ -34,6 +35,14 @@ class FixedStep:
         """
         now = self.timer.time
         frame_time = now - self._last_time
+
+        if self.target_fps > 0:
+            target_frame_time = 1.0 / self.target_fps
+            if frame_time < target_frame_time:
+                time.sleep(target_frame_time - frame_time)
+                now = self.timer.time
+                frame_time = now - self._last_time
+
         self._last_time = now
 
         # Prevent spiral of death (lag causing more lag)

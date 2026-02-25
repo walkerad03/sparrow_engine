@@ -1,6 +1,7 @@
 # sparrow/ecs/world.py
 from __future__ import annotations
 
+import dataclasses
 import logging
 from collections import deque
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
@@ -10,6 +11,33 @@ import numpy as np
 logger = logging.getLogger("Sparrow.ECS")
 
 T = TypeVar("T")
+
+
+def _infer_dtype(comp_type: Type) -> np.dtype:
+    if hasattr(comp_type, "dtype"):
+        return getattr(comp_type, "dtype")
+
+    if dataclasses.is_dataclass(comp_type):
+        fields = []
+        type_mapping: dict[Any, str] = {
+            float: "f4",
+            int: "i4",
+            bool: "?",
+        }
+
+        for field in dataclasses.fields(comp_type):
+            np_type = type_mapping.get(field.type)
+            if not np_type:
+                raise TypeError(
+                    f"Unsupported type {field.type} in component {comp_type.__name__}"
+                )
+            fields.append((field.name, np_type))
+
+        if fields:
+            logger.info(f"inferred dtype for {comp_type.__name__}: {fields}")
+            return np.dtype(fields)
+
+    raise TypeError(f"{comp_type.__name__} must be a dataclass")
 
 
 class World:
@@ -219,7 +247,8 @@ class World:
             self._component_registry[component_type] = comp_id
             self._next_comp_id += 1
 
-            dtype = getattr(component_type, "dtype", np.float32)
+            dtype = _infer_dtype(component_type)
+
             self._component_arrays[comp_id] = np.zeros(
                 self.capacity, dtype=dtype
             )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import cProfile
 import functools
 import logging
+import os
 import pstats
 import sys
 import tracemalloc
@@ -75,12 +76,20 @@ def profile(
                 wait_time = 0.0
 
                 internal_stats = getattr(stats, "stats", {})
-                for (_, _, name), (_, nc, tt, _, _) in internal_stats.items():
+                for (file_path, _, name), (
+                    _,
+                    nc,
+                    tt,
+                    _,
+                    _,
+                ) in internal_stats.items():
                     if name == "next_frame":
                         frame_count += nc
                         wait_time += tt
                     elif name == "update_fixed":
-                        update_count += nc
+                        file_name = os.path.basename(file_path)
+                        if file_name == "scene.py":
+                            update_count += nc
 
                 total_time = getattr(stats, "total_tt", 0)
                 peak_mb = peak / 1024 / 1024

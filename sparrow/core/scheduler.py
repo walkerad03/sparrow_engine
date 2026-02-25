@@ -4,17 +4,15 @@ from enum import Enum, auto
 from graphlib import TopologicalSorter
 from typing import Callable, Dict, List, Union
 
-from sparrow.core.world import World
+from sparrow.ecs import World
 from sparrow.types import SystemId
 
 
 class Stage(Enum):
-    STARTUP = auto()  # Run once on scene start
-    INPUT = auto()  # Poll input
-    UPDATE = auto()  # Game logic (AI, scripts)
-    PHYSICS = auto()  # Movement integration, collision
-    POST_UPDATE = auto()  # Camera follow, cleanup
-    RENDER = auto()  # Extraction to RenderFrame
+    SETUP = auto()
+    FIXED_UPDATE = auto()
+    VARIABLE_UPDATE = auto()
+    TEARDOWN = auto()
 
 
 SystemFn = Callable[[World], None]
