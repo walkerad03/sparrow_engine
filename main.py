@@ -8,11 +8,11 @@ from sparrow.runtime import Application, ApplicationConfig
 setup_logging()
 logger = logging.getLogger("sparrow.main")
 
-
+# TODO: Fix memory leak in asset pipeline
 def main():
     """Main entry point to initialize and run the Sparrow engine."""
 
-    config = ApplicationConfig(target_ups=120, capacity=100_000)
+    config = ApplicationConfig(target_ups=120, entity_cap=1_000_000)
     app = Application(config)
     scene = GameScene()
 

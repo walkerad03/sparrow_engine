@@ -19,6 +19,3 @@ def translation_system(world: World) -> None:
         view.Transform.x += view.Velocity.dx * sim_time.fixed_dt
         view.Transform.y += view.Velocity.dy * sim_time.fixed_dt
         view.Transform.z += view.Velocity.dz * sim_time.fixed_dt
-
-        first_x = view.Transform.x[0]
-        logger.info(f"Fixed Update: Entity 0 X-Pos is {first_x:.2f}")

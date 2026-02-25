@@ -8,6 +8,9 @@ from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
 import numpy as np
 
+from sparrow.assets import AssetHandle, MeshData
+from sparrow.types import Quaternion, Vector3
+
 logger = logging.getLogger("Sparrow.ECS")
 
 T = TypeVar("T")
@@ -19,10 +22,13 @@ def _infer_dtype(comp_type: Type) -> np.dtype:
 
     if dataclasses.is_dataclass(comp_type):
         fields = []
-        type_mapping: dict[Any, str] = {
+        type_mapping: dict[Any, str | tuple[str, tuple[int, ...]]] = {
             float: "f4",
             int: "i4",
             bool: "?",
+            AssetHandle[MeshData]: "O",
+            Vector3: ("f4", (3,)),
+            Quaternion: ("f4", (4,)),
         }
 
         for field in dataclasses.fields(comp_type):
@@ -229,7 +235,15 @@ class World:
         if arr.dtype.names:
             for name in arr.dtype.names:
                 if hasattr(comp, name):
-                    arr[name][entity_id] = getattr(comp, name)
+                    val = getattr(comp, name)
+
+                    val_type = type(val).__name__
+                    if val_type == "Vector3":
+                        val = (val.x, val.y, val.z)
+                    elif val_type == "Quaternion":
+                        val = (val.x, val.y, val.z, val.w)
+
+                    arr[name][entity_id] = val
         else:
             arr[entity_id] = comp
 

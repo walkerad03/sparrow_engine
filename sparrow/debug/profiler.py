@@ -99,8 +99,21 @@ def profile(
                 peak_mb = peak / 1024 / 1024
                 net_mb = current / 1024 / 1024
 
+                h = int(total_time // 3600)
+                m = int((total_time % 3600) // 60)
+                s = total_time % 60
+
+                has_h = h > 0
+                has_m = m > 0
+
+                h_part = f"{h}:" * has_h
+                m_part = [f"{m}:" * has_m, f"{m:02d}:"][has_h]
+                s_part = [f"{s:.3f}", f"{s:06.3f}"][has_h | has_m]
+
+                tt_formatted = h_part + m_part + s_part
+
                 logger.info("Profiling results for %s:", fn_name)
-                logger.info("  Runtime: %.4fs", total_time)
+                logger.info(f"  Runtime: {tt_formatted}")
                 logger.info(
                     "  Memory: Peak %.2fMB | Net Change %+.2fMB",
                     peak_mb,

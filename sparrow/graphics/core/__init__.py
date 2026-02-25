@@ -7,11 +7,9 @@ from sparrow.graphics.core.settings import (
     ResolutionSettings,
     SunlightSettings,
 )
-from sparrow.graphics.core.window import Window
 
 __all__ = [
     "Renderer",
-    "Window",
     "RendererAPI",
     "RendererSettings",
     "ResolutionSettings",

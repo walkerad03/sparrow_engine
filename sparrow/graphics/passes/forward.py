@@ -15,6 +15,7 @@ from sparrow.graphics.graph.pass_base import (
     RenderServices,
 )
 from sparrow.graphics.resources import ShaderManager
+from sparrow.graphics.utils import pack_mat4
 from sparrow.graphics.utils.batcher import RenderBatcher
 from sparrow.graphics.utils.ids import ResourceId
 from sparrow.graphics.utils.uniforms import set_uniform
@@ -85,7 +86,7 @@ class ForwardPBRPass(RenderPass):
         set_uniform(
             program,
             "u_view_proj",
-            ctx.frame.camera.view_proj.T.tobytes(),
+            pack_mat4(ctx.frame.camera.view_proj.T),
         )
 
         batches = self._batcher.group_objects(ctx.frame.objects)

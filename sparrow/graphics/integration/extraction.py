@@ -1,10 +1,9 @@
 # sparrow/graphics/integration/extraction.py
-# TODO: Get correct transforms
 import numpy as np
 
-from sparrow.core.components import EID, Transform
-from sparrow.core.query import Query
-from sparrow.core.world import World
+from sparrow.core.components import Transform
+from sparrow.core.time import SimulationTime
+from sparrow.ecs.world import World
 from sparrow.graphics.integration.components import (
     Camera,
     DirectionalLight,
@@ -16,81 +15,82 @@ from sparrow.graphics.integration.frame import (
     RenderFrame,
 )
 from sparrow.math import create_perspective_projection, create_view_matrix
-from sparrow.resources.core import SimulationTime
+from sparrow.types import EntityId, Vector3
+
+_FALLBACK_MAT = np.eye(4, dtype="f4")
+_FALLBACK_VEC = np.zeros(3, dtype="f4")
 
 
 def extract_render_frame_system(world: World) -> None:
     """
     System: Queries the ECS and constructs a RenderFrame snapshot.
     """
-    sim_time = world.resource_get(SimulationTime)
+    sim_time = world.res_get(SimulationTime)
 
     if not sim_time:
         return
 
-    time_s = sim_time.elapsed_seconds
-    dt = sim_time.delta_seconds
+    time_s = sim_time.ticks * sim_time.fixed_dt
+    dt = sim_time.fixed_dt
+
     camera_data = _extract_active_camera(world)
     sun_dir, sun_col = _extract_sun(world)
+
     objects = []
-    total_visible = 0
+    transforms = np.empty((0, 4, 4), dtype="f4")
 
-    for count, (trans_view, mesh_view, eids_view) in Query(
-        world, Transform, Mesh, EID
-    ):
-        m_vis = mesh_view.visible
-        if count > 0:
-            total_visible += int(m_vis[:count].sum())
+    view = world.query(Transform, Mesh)
+    if len(view) > 0:
+        m_vis = view.Mesh.visible
+        total_visible = int(m_vis.sum())
 
-    transforms = np.empty((total_visible, 4, 4), dtype="f4")
-    transform_index = 0
+        if total_visible > 0:
+            transforms = np.empty((total_visible, 4, 4), dtype="f4")
+            transform_index = 0
 
-    for count, (trans_view, mesh_view, eids_view) in Query(
-        world, Transform, Mesh, EID
-    ):
-        positions = trans_view.pos  # (N, 3)
-        rotations = trans_view.rot  # (N, 4)
-        scales = trans_view.scale
+            positions = view.Transform.pos
+            rotations = view.Transform.rot
+            scales = view.Transform.scale
 
-        m_handles = mesh_view.handle
-        m_vis = mesh_view.visible
-        eids = eids_view.id
+            m_handles = view.Mesh.handle
 
-        for i in range(count):
-            if not m_vis[i]:
-                continue
+            eids = view._indices
 
-            # Compute Transform in-place
-            _write_model_matrix(
-                transforms[transform_index],
-                positions[i],
-                rotations[i],
-                scales[i],
-            )
+            for i in range(len(view)):
+                if not m_vis[i]:
+                    continue
 
-            objects.append(
-                ObjectInstance(
-                    entity_id=eids[i],
-                    mesh_id=m_handles[i].id,
-                    transform_index=transform_index,
-                    albedo_id=None,
-                    color=(1.0, 0.5, 0.2, 1.0),
-                    roughness=0.5,
-                    metallic=0.0,
+                _write_model_matrix(
+                    transforms[transform_index],
+                    positions[i],
+                    rotations[i],
+                    scales[i],
                 )
-            )
-            transform_index += 1
+
+                objects.append(
+                    ObjectInstance(
+                        entity_id=EntityId(eids[i]),
+                        mesh_id=m_handles[i].id,
+                        transform_index=transform_index,
+                        albedo_id=None,
+                        color=(1.0, 0.5, 0.2, 1.0),
+                        roughness=0.5,
+                        metallic=0.0,
+                    )
+                )
+                transform_index += 1
 
     frame = RenderFrame(
         camera=camera_data,
         objects=objects,
         transforms=transforms,
-        sun_direction=sun_dir,
+        sun_direction=Vector3(sun_dir[0], sun_dir[1], sun_dir[2]),
         sun_color=sun_col,
         time=time_s,
         delta_time=dt,
     )
-    world.resource_add(frame)
+
+    world.res_add(frame)
 
 
 def _write_model_matrix(out: np.ndarray, pos, rot, scale) -> None:
@@ -142,42 +142,45 @@ def _write_model_matrix(out: np.ndarray, pos, rot, scale) -> None:
 
 
 def _extract_active_camera(world: World) -> CameraData:
-    # Query yields batches, but we just want the first active camera
-    for count, (cam_view, trans_view) in Query(world, Camera, Transform):
-        actives = cam_view.active  # numpy array of bools
+    view = world.query(Camera, Transform)
 
-        for i in range(count):
+    if len(view) > 0:
+        actives = view.Camera.active  # numpy array of bools
+
+        for i in range(len(view)):
             if actives[i]:
                 # Found active camera
-                fov = cam_view.fov[i]
-                near = cam_view.near[i]
-                far = cam_view.far[i]
+                fov = view.Camera.fov[i]
+                near = view.Camera.near[i]
+                far = view.Camera.far[i]
 
-                pos = trans_view.pos[i]
-                rot = trans_view.rot[i]
+                pos = view.Transform.pos[i]
+                rot = view.Transform.rot[i]
 
                 aspect = 16.0 / 9.0
                 proj = create_perspective_projection(fov, aspect, near, far)
-                view = create_view_matrix(pos, rot)
+                view_mat = create_view_matrix(pos, rot)
 
                 return CameraData(
-                    view=view,
+                    view=view_mat,
                     proj=proj,
-                    view_proj=proj @ view,
+                    view_proj=proj @ view_mat,
                     position=pos,
                     near=near,
                     far=far,
                 )
 
-    # Fallback
-    return CameraData(np.eye(4), np.eye(4), np.eye(4), np.zeros(3), 0.1, 100.0)
+    # Fallback if no camera exists
+    return CameraData(
+        _FALLBACK_MAT, _FALLBACK_MAT, _FALLBACK_MAT, _FALLBACK_VEC, 0.1, 100.0
+    )
 
 
 def _extract_sun(world: World):
-    # Just take the first light
-    for count, (light_view, trans_view) in Query(
-        world, DirectionalLight, Transform
-    ):
-        if count > 0:
-            return ((0.5, -0.8, 0.2), light_view.color[0])
+    view = world.query(DirectionalLight, Transform)
+
+    if len(view) > 0:
+        # Just take the first light
+        return ((0.5, -0.8, 0.2), view.DirectionalLight.color[0])
+
     return ((0.5, -0.8, 0.2), (1.0, 1.0, 1.0))

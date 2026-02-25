@@ -1,5 +1,6 @@
 # sparrow/assets/server.py
 import hashlib
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from queue import Queue
@@ -11,6 +12,8 @@ from sparrow.assets.importers.mesh import ObjImporter
 from sparrow.assets.importers.shader import ShaderImporter
 from sparrow.assets.importers.texture import TextureImporter
 from sparrow.assets.registry import AssetRegistry
+
+logger = logging.getLogger("sparrow.assets")
 
 
 class AssetServer:
@@ -39,6 +42,7 @@ class AssetServer:
         """
         Non-blocking load request. Return handle instantly.
         """
+        logger.info(f"Fetching handle for: {path}")
         if path in self._handles:
             return self._handles[path]
 
@@ -57,16 +61,18 @@ class AssetServer:
         """
         Load asset on background thread.
         """
+        logger.info(f"Loading {full_path} to disk as {asset_id}")
         try:
             ext = full_path.suffix.lower()
             importer = self._importers.get(ext)
             if not importer:
+                logger.warning(f"No importer for {ext}")
                 raise ValueError(f"No importer for {ext}")
 
             data = importer.import_file(full_path)
             self._loaded_queue.put((asset_id, data))
         except Exception as e:
-            print(f"Failed to load {full_path}: {e}")
+            logger.warning(f"Failed to load {full_path}: {e}")
 
     def update(self) -> List[AssetId]:
         """
@@ -78,6 +84,7 @@ class AssetServer:
             asset_id, data = self._loaded_queue.get()
             self.registry.store(asset_id, data)
             loaded_ids.append(asset_id)
+            logger.info(f"Loaded asset {asset_id}")
 
         return loaded_ids
 

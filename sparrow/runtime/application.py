@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
 
+from sparrow.assets.server import AssetServer
 from sparrow.core import Scene
 from sparrow.debug.profiler import profile
 from sparrow.ecs.world import World
+from sparrow.graphics.core.renderer import Renderer
+from sparrow.graphics.pipelines import build_standard_3d_pipeline
 from sparrow.runtime.managers import InterfaceManager, ResourceManager
 from sparrow.runtime.timing import FixedStep
 
@@ -26,7 +29,7 @@ class ApplicationConfig:
     target_ups: int = 60
     target_fps: int = 60
     max_frame_time: float = 0.25
-    capacity: int = 1_000_000
+    entity_cap: int = 1_000_000
 
 
 class Application:
@@ -56,7 +59,7 @@ class Application:
         self.config = config or ApplicationConfig()
         self.running: bool = False
 
-        self.world = World(capacity=self.config.capacity)
+        self.world = World(capacity=self.config.entity_cap)
 
         self.interface = InterfaceManager()
         self.resources = ResourceManager(ctx=self.interface.ctx)
@@ -70,6 +73,14 @@ class Application:
         self.world.res_add(self.interface)
         self.world.res_add(self.resources)
         self.world.res_add(self.clock)
+
+        # TODO: Move this into a system so that we can avoid unnecessary imports
+        asset_root = Path(".") / "sparrow" / "assets"
+        self.asset_server = AssetServer(asset_root)
+        self.world.res_add(self.asset_server)
+        self.renderer = Renderer(self.interface.ctx, self.asset_server)
+        self.renderer.set_pipeline(build_standard_3d_pipeline)
+        self.world.res_add(self.renderer)
 
         self.raw_event_buffer: List[Any] = []
         self._active_scene: Optional[Scene] = None
@@ -113,8 +124,6 @@ class Application:
 
                     for _ in range(steps):
                         self._active_scene.update_fixed(self.world)
-
-                    self.interface.clear(color=(0.1, 0.1, 0.1, 1.0))
 
                     self._active_scene.update_variable(
                         self.world, self.clock.alpha
