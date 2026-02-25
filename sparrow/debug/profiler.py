@@ -78,14 +78,18 @@ def profile(
                 internal_stats = getattr(stats, "stats", {})
                 for (file_path, _, name), (
                     _,
-                    nc,
-                    tt,
-                    _,
+                    nc,  # number of calls
+                    tt,  # total time
+                    ct,  # cumulative time
                     _,
                 ) in internal_stats.items():
                     if name == "next_frame":
                         frame_count += nc
-                        wait_time += tt
+                        wait_time += ct
+                    elif name == "sync":
+                        file_name = os.path.basename(file_path)
+                        if file_name == "timing.py":
+                            wait_time += ct
                     elif name == "update_fixed":
                         file_name = os.path.basename(file_path)
                         if file_name == "scene.py":
@@ -106,7 +110,10 @@ def profile(
                 if frame_count > 0:
                     fps = frame_count / total_time
                     ups = update_count / total_time
+
                     cpu_work_time = total_time - wait_time
+                    cpu_work_time = max(0.0, cpu_work_time)
+
                     avg_work_ms = (cpu_work_time / frame_count) * 1000
                     wait_percent = (wait_time / total_time) * 100
                     mem_per_frame_kb = (
@@ -115,7 +122,7 @@ def profile(
 
                     logger.info("  Performance: %.2f FPS | %.2f UPS", fps, ups)
                     logger.info(
-                        "  Frame Speed: Work/Frame: %.2fms | V-Sync Idle: %.1f%%",
+                        "  Frame Speed: Work/Frame: %.2fms | Idle: %.1f%%",
                         avg_work_ms,
                         wait_percent,
                     )
@@ -127,7 +134,7 @@ def profile(
                         )
                 else:
                     logger.info(
-                        "  No 'swap_buffers' detected; frame metrics unavailable."
+                        "  No 'next_frame' detected; frame metrics unavailable."
                     )
 
                 logger.info("Detailed traces saved to: %s", out_dir)

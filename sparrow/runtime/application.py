@@ -122,6 +122,8 @@ class Application:
 
                     self.interface.swap_buffers()
 
+                    self.clock.sync()
+
                 if self.interface.should_close():
                     self.running = False
         except KeyboardInterrupt:
