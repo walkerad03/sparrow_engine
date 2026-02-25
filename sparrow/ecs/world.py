@@ -139,7 +139,7 @@ class World:
         """
         for comp in components:
             comp_type = type(comp)
-            comp_id = self.register_component(comp_type)
+            comp_id = self._register_component(comp_type)
 
             self._masks[entity_id] |= comp_id
 
@@ -205,7 +205,7 @@ class World:
         else:
             arr[entity_id] = comp
 
-    def register_component(self, component_type: Type) -> int:
+    def _register_component(self, component_type: Type) -> int:
         """Registers a component type and allocates its SoA buffer.
 
         Args:

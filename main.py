@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 
-from sparrow.debug.profiler import profile
 from sparrow.ecs import World
 from sparrow.runtime import Application, ApplicationConfig
 
@@ -37,7 +36,7 @@ def setup_logging():
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(SparrowFormatter(name_width=20))
-    root.addHandler(console_handler)
+    # root.addHandler(console_handler)
 
     file_handler = logging.FileHandler(debug_dir / "engine_raw.log", mode="w")
     raw_formatter = logging.Formatter(
@@ -90,11 +89,10 @@ class MockScene:
         logger.info(f"Tearing down scene: {self.id}")
 
 
-@profile(enabled=True, out_dir=Path(".debug"))
 def main():
     """Main entry point to initialize and run the Sparrow engine."""
 
-    config = ApplicationConfig(target_ups=500, capacity=1000)
+    config = ApplicationConfig(target_ups=120, capacity=1000)
     app = Application(config)
 
     scene = MockScene()

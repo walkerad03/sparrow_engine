@@ -1,7 +1,9 @@
 # sparrow/runtime/application.py
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List, Optional
 
+from sparrow.debug.profiler import profile
 from sparrow.ecs.world import World
 from sparrow.runtime.managers import InterfaceManager, ResourceManager
 from sparrow.runtime.timing import FixedStep
@@ -18,6 +20,7 @@ class ApplicationConfig:
     """
 
     target_ups: int = 60
+    target_fps: int = 60
     max_frame_time: float = 0.25
     capacity: int = 1_000_000
 
@@ -54,7 +57,9 @@ class Application:
         self.interface = InterfaceManager()
         self.resources = ResourceManager(ctx=self.interface.ctx)
         self.clock = FixedStep(
-            target_fps=self.config.target_ups,
+            timer=self.interface.timer,
+            target_ups=self.config.target_ups,
+            target_fps=self.config.target_fps,
             max_frame_time=self.config.max_frame_time,
         )
 
@@ -77,6 +82,7 @@ class Application:
         self._active_scene = scene
         self._active_scene.setup(self.world)
 
+    @profile(enabled=True, out_dir=Path(".debug"))
     def run(self) -> None:
         """Starts the main game loop.
 
@@ -92,8 +98,6 @@ class Application:
 
             steps = self.clock.advance()
 
-            self.interface.clear(color=(0.1, 0.1, 0.1, 1.0))
-
             if self._active_scene:
                 for event in self.raw_event_buffer:
                     self.world.event_add(event)
@@ -107,12 +111,14 @@ class Application:
                         self.clock.dt,
                     )
 
+                self.interface.clear(color=(0.1, 0.1, 0.1, 1.0))
+
                 self._active_scene.update_variable(
                     self.world,
                     self.clock.alpha,
                 )
 
-            self.interface.swap_buffers()
+                self.interface.swap_buffers()
 
             if self.interface.should_close():
                 self.running = False

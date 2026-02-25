@@ -32,15 +32,17 @@ class InterfaceManager:
             {
                 "class": "moderngl_window.context.glfw.Window",
                 "title": "Sparrow Engine",
-                "size": (1270, 720),
+                "size": size,
                 "gl_version": (4, 6),
                 "resizable": True,
                 "cursor": True,
-                "vsync": True,
+                "vsync": False,
             }
         )
 
-        self.wnd = mglw.create_window_from_settings()
+        self.wnd: mglw.BaseWindow = mglw.create_window_from_settings()
+        self.timer: mglw.Timer = mglw.timers.clock.Timer()
+        self.timer.start()
 
         self.ctx = self.wnd.ctx
         self._event_buffer: List[Any] = []
@@ -95,6 +97,7 @@ class InterfaceManager:
     def swap_buffers(self) -> None:
         """Swaps the window buffers to display the rendered frame."""
         self.wnd.swap_buffers()
+        self.timer.next_frame()
 
 
 @dataclass

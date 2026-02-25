@@ -1,24 +1,30 @@
 # sparrow/runtime/timing.py
-import time
 from dataclasses import dataclass
+
+import moderngl_window as mglw
 
 
 @dataclass
 class FixedStep:
-    target_fps: int
-    max_frame_time: float = 0.25
-    max_steps_per_frame: int = 6
+    target_ups: int
+    target_fps: int  # TODO: Find a good way to support this.
+    timer: mglw.timers.clock.Timer
+    max_frame_time: float = 1.0
+    max_steps_per_frame: int = 16
 
     _dt: float = 0.0
     _last_time: float = 0.0
     _accum: float = 0.0
 
+    _render_dt: float = 0.0
+    _last_render_time: float = 0.0
+
     def __post_init__(self):
-        self._dt = 1.0 / self.target_fps
+        self._dt = 1.0 / self.target_ups
 
     def start(self) -> None:
         """Call this right before the main loop starts."""
-        self._last_time = time.perf_counter()
+        self._last_time = self.timer.time
         self._accum = 0.0
 
     def advance(self) -> int:
@@ -26,7 +32,7 @@ class FixedStep:
         Advances the timer and returns how many fixed steps
         should be run this frame.
         """
-        now = time.perf_counter()
+        now = self.timer.time
         frame_time = now - self._last_time
         self._last_time = now
 

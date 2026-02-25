@@ -71,13 +71,16 @@ def profile(
                         ps.sort_stats(sort_key).print_stats(50)
 
                 frame_count = 0
+                update_count = 0
                 wait_time = 0.0
 
                 internal_stats = getattr(stats, "stats", {})
                 for (_, _, name), (_, nc, tt, _, _) in internal_stats.items():
-                    if name == "swap_buffers":
+                    if name == "next_frame":
                         frame_count += nc
                         wait_time += tt
+                    elif name == "update_fixed":
+                        update_count += nc
 
                 total_time = getattr(stats, "total_tt", 0)
                 peak_mb = peak / 1024 / 1024
@@ -93,6 +96,7 @@ def profile(
 
                 if frame_count > 0:
                     fps = frame_count / total_time
+                    ups = update_count / total_time
                     cpu_work_time = total_time - wait_time
                     avg_work_ms = (cpu_work_time / frame_count) * 1000
                     wait_percent = (wait_time / total_time) * 100
@@ -100,12 +104,12 @@ def profile(
                         (current / frame_count) / 1024 if current > 0 else 0
                     )
 
+                    logger.info("  Performance: %.2f FPS | %.2f UPS", fps, ups)
                     logger.info(
-                        "  Performance: %.2f FPS | Work/Frame: %.2fms",
-                        fps,
+                        "  Frame Speed: Work/Frame: %.2fms | V-Sync Idle: %.1f%%",
                         avg_work_ms,
+                        wait_percent,
                     )
-                    logger.info("  V-Sync Idle: %.1f%%", wait_percent)
 
                     if mem_per_frame_kb > 0.1:
                         logger.warning(
