@@ -5,6 +5,7 @@ from sparrow.graphics.integration import extract_render_frame_system
 from sparrow.systems.graphics import graphics_system
 from sparrow.systems.input import input_system
 from sparrow.systems.sim_time import simulation_time_system
+from sparrow.systems.spatial_indexing import spatial_indexing_system
 from sparrow.systems.translation import translation_system
 from sparrow.types import SystemId
 
@@ -18,7 +19,11 @@ class Scene:
 
     def _register_default_systems(self):
         self.scheduler.add_system(Stage.FIXED_UPDATE, simulation_time_system)
-        self.scheduler.add_system(Stage.FIXED_UPDATE, translation_system)
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            translation_system,
+            name=SystemId("translation"),
+        )
         self.scheduler.add_system(
             Stage.VARIABLE_UPDATE,
             extract_render_frame_system,
@@ -30,6 +35,11 @@ class Scene:
             after=SystemId("extract_frame"),
         )
         self.scheduler.add_system(Stage.FIXED_UPDATE, input_system)
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            spatial_indexing_system,
+            after=SystemId("translation"),
+        )
 
     def setup(self, world: World) -> None:
         self.scheduler.run_stage(Stage.SETUP, world)
