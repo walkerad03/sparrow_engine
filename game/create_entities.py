@@ -3,7 +3,7 @@ import random
 from sparrow.assets import AssetServer, DefaultMeshes
 from sparrow.core import Transform, Velocity
 from sparrow.ecs import World
-from sparrow.graphics.integration import Mesh
+from sparrow.graphics.integration import Camera, Mesh
 from sparrow.types import Vector3
 
 
@@ -27,3 +27,10 @@ def create_entities_system(world: World) -> None:
             Velocity(),
             Mesh(handle=mesh_handle),
         )
+
+    cam = world.entity_add()
+    world.comp_add(
+        cam,
+        Transform(pos=Vector3(0.0, 2.0, 8.0)),
+        Camera(active=True),
+    )

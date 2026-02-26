@@ -18,6 +18,11 @@ class CameraData:
 
 
 @dataclass(slots=True)
+class CameraOutput:
+    active: CameraData
+
+
+@dataclass(slots=True)
 class ObjectInstance:
     """
     A single renderable object extracted from the world.

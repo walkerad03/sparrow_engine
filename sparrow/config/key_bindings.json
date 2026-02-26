@@ -1,4 +1,6 @@
 {
+  "65": "move_left",
+  "68": "move_right",
   "87": "move_forward",
   "83": "move_backward"
 }

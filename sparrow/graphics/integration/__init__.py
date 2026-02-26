@@ -8,12 +8,14 @@ from sparrow.graphics.integration.components import (
 from sparrow.graphics.integration.extraction import extract_render_frame_system
 from sparrow.graphics.integration.frame import (
     CameraData,
+    CameraOutput,
     ObjectInstance,
     RenderFrame,
 )
 
 __all__ = [
     "RenderFrame",
+    "CameraOutput",
     "CameraData",
     "ObjectInstance",
     "Mesh",

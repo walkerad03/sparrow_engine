@@ -5,16 +5,15 @@ from sparrow.core.components import Transform
 from sparrow.core.time import SimulationTime
 from sparrow.ecs.world import World
 from sparrow.graphics.integration.components import (
-    Camera,
     DirectionalLight,
     Mesh,
 )
 from sparrow.graphics.integration.frame import (
     CameraData,
+    CameraOutput,
     ObjectInstance,
     RenderFrame,
 )
-from sparrow.math import create_perspective_projection, create_view_matrix
 from sparrow.types import EntityId, Vector3
 
 _FALLBACK_MAT = np.eye(4, dtype="f4")
@@ -33,7 +32,7 @@ def extract_render_frame_system(world: World) -> None:
     time_s = sim_time.ticks * sim_time.fixed_dt
     dt = sim_time.fixed_dt
 
-    camera_data = _extract_active_camera(world)
+    camera_data = _extract_prepared_camera(world)
     sun_dir, sun_col = _extract_sun(world)
 
     objects = []
@@ -141,36 +140,12 @@ def _write_model_matrix(out: np.ndarray, pos, rot, scale) -> None:
     out[3, 3] = 1.0
 
 
-def _extract_active_camera(world: World) -> CameraData:
-    view = world.query(Camera, Transform)
+def _extract_prepared_camera(world: World) -> CameraData:
+    camera_out = world.res_get(CameraOutput)
+    if camera_out:
+        return camera_out.active
 
-    if len(view) > 0:
-        actives = view.Camera.active  # numpy array of bools
-
-        for i in range(len(view)):
-            if actives[i]:
-                # Found active camera
-                fov = view.Camera.fov[i]
-                near = view.Camera.near[i]
-                far = view.Camera.far[i]
-
-                pos = view.Transform.pos[i]
-                rot = view.Transform.rot[i]
-
-                aspect = 16.0 / 9.0
-                proj = create_perspective_projection(fov, aspect, near, far)
-                view_mat = create_view_matrix(pos, rot)
-
-                return CameraData(
-                    view=view_mat,
-                    proj=proj,
-                    view_proj=proj @ view_mat,
-                    position=pos,
-                    near=near,
-                    far=far,
-                )
-
-    # Fallback if no camera exists
+    # Fallback when camera prep has not yet populated the resource
     return CameraData(
         _FALLBACK_MAT, _FALLBACK_MAT, _FALLBACK_MAT, _FALLBACK_VEC, 0.1, 100.0
     )

@@ -12,7 +12,11 @@ logger = logging.getLogger("sparrow.main")
 def main():
     """Main entry point to initialize and run the Sparrow engine."""
 
-    config = ApplicationConfig(target_ups=120, entity_cap=1_000_000)
+    config = ApplicationConfig(
+        target_ups=60,
+        entity_cap=10_000,
+        show_cursor=False,
+    )
     app = Application(config)
     scene = GameScene()
 

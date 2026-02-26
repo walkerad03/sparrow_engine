@@ -24,7 +24,10 @@ class InterfaceManager:
     """
 
     def __init__(
-        self, title: str = "Sparrow Engine", size: tuple = (1280, 720)
+        self,
+        title: str = "Sparrow Engine",
+        size: tuple = (1280, 720),
+        show_cursor: bool = True,
     ):
         """Initializes the window and ModernGL context.
 
@@ -39,12 +42,15 @@ class InterfaceManager:
                 "size": size,
                 "gl_version": (4, 6),
                 "resizable": True,
-                "cursor": True,
+                "cursor": show_cursor,
                 "vsync": False,
             }
         )
 
         self.wnd: mglw.BaseWindow = mglw.create_window_from_settings()
+        if not show_cursor:
+            self.wnd.mouse_exclusivity = True
+
         self.timer: BaseTimer = PerfCounterTimer()
         self.timer.start()
 

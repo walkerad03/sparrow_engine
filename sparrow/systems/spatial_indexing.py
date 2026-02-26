@@ -20,12 +20,14 @@ def spatial_indexing_system(world: World) -> None:
     eids = view._indices
 
     for i in range(len(view)):
+        eid = int(eids[i])
         new_key = grid.get_key(positions[i])
+        old_key = int(old_keys[i])
 
-        if new_key != old_keys[i]:
-            if old_keys[i] in grid.cells:
-                grid.cells[old_keys[i]].remove(eids[i])
+        if new_key != old_key:
+            if old_key in grid.cells:
+                grid.cells[old_key].discard(eid)
 
-            grid.cells[new_key].append(eids[i])
+            grid.cells[new_key].add(eid)
 
             view.Transform._array["_grid_key"][eids[i]] = new_key

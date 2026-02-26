@@ -2,6 +2,7 @@
 from sparrow.core.scheduler import Scheduler, Stage
 from sparrow.ecs import World
 from sparrow.graphics.integration import extract_render_frame_system
+from sparrow.systems.camera import camera_prepare_system
 from sparrow.systems.graphics import graphics_system
 from sparrow.systems.input import input_system
 from sparrow.systems.sim_time import simulation_time_system
@@ -26,8 +27,14 @@ class Scene:
         )
         self.scheduler.add_system(
             Stage.VARIABLE_UPDATE,
+            camera_prepare_system,
+            name=SystemId("prepare_camera"),
+        )
+        self.scheduler.add_system(
+            Stage.VARIABLE_UPDATE,
             extract_render_frame_system,
             name=SystemId("extract_frame"),
+            after=SystemId("prepare_camera"),
         )
         self.scheduler.add_system(
             Stage.VARIABLE_UPDATE,

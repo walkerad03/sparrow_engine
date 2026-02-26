@@ -1,5 +1,6 @@
 # game/game_scene.py
 from game.create_entities import create_entities_system
+from game.freecam import freecam_system
 from game.move_model import move_model_system
 from sparrow.core import Scene, Stage
 from sparrow.ecs import World
@@ -11,6 +12,7 @@ class GameScene(Scene):
 
         self.scheduler.add_system(Stage.SETUP, create_entities_system)
         self.scheduler.add_system(Stage.FIXED_UPDATE, move_model_system)
+        self.scheduler.add_system(Stage.FIXED_UPDATE, freecam_system)
 
     def setup(self, world: World) -> None:
         super().setup(world)

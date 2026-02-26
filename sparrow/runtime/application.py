@@ -30,6 +30,7 @@ class ApplicationConfig:
     target_fps: int = 60
     max_frame_time: float = 0.25
     entity_cap: int = 1_000_000
+    show_cursor: bool = True
 
 
 class Application:
@@ -61,7 +62,7 @@ class Application:
 
         self.world = World(capacity=self.config.entity_cap)
 
-        self.interface = InterfaceManager()
+        self.interface = InterfaceManager(show_cursor=self.config.show_cursor)
         self.resources = ResourceManager(ctx=self.interface.ctx)
         self.clock = FixedStep(
             timer=self.interface.timer,
