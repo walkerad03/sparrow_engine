@@ -1,32 +1,61 @@
 import random
 
 from sparrow.assets import AssetServer, DefaultMeshes
-from sparrow.core import Transform, Velocity
+from sparrow.core import Transform
 from sparrow.ecs import World
-from sparrow.graphics.integration import Camera, Mesh
+from sparrow.graphics.integration import Camera, Material, Mesh
 from sparrow.types import Vector3
 
 
-def create_entities_system(world: World) -> None:
+def make_test_entity(world: World) -> int:
     asset_server = world.res_get(AssetServer)
     if asset_server:
-        mesh_handle = asset_server.load(DefaultMeshes.CUBE)
+        mesh_handle = asset_server.load(DefaultMeshes.SPHERE)
 
-    for _ in range(100):
-        e = world.entity_add()
-        world.comp_add(
-            e,
-            Transform(
-                pos=Vector3(
-                    x=random.uniform(-10, 10),
-                    y=random.uniform(-10, 10),
-                    z=random.uniform(-10, 10),
-                ),
-                scale=Vector3(x=1, y=1, z=1),
+    eid = world.entity_add()
+
+    rand_scale = random.uniform(0, 1)
+
+    world.comp_add(
+        eid,
+        Transform(
+            pos=Vector3(
+                x=random.uniform(-50, 50),
+                y=random.uniform(1, 50),
+                z=random.uniform(-50, 50),
             ),
-            Velocity(),
-            Mesh(handle=mesh_handle),
-        )
+            scale=Vector3(x=rand_scale, y=rand_scale, z=rand_scale),
+        ),
+        Mesh(handle=mesh_handle),
+        Material(base_color=(random.uniform(0, 255), 1.0, 1.0, 1.0)),
+    )
+
+    return eid
+
+
+def make_floor(world: World) -> int:
+    asset_server = world.res_get(AssetServer)
+    if asset_server:
+        mesh_handle = asset_server.load(DefaultMeshes.PLANE)
+
+    eid = world.entity_add()
+    world.comp_add(
+        eid,
+        Transform(
+            scale=Vector3(x=20, y=1, z=20),
+        ),
+        Mesh(handle=mesh_handle),
+        Material(base_color=(random.uniform(0, 1), 1.0, 1.0, 1.0)),
+    )
+
+    return eid
+
+
+def create_entities_system(world: World) -> None:
+    for _ in range(100):
+        make_test_entity(world)
+
+    make_floor(world)
 
     cam = world.entity_add()
     world.comp_add(

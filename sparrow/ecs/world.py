@@ -4,11 +4,11 @@ from __future__ import annotations
 import dataclasses
 import logging
 from collections import deque
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union, cast
 
 import numpy as np
 
-from sparrow.assets import AssetHandle, MeshData
+from sparrow.assets import AssetHandle, MeshData, TextureData
 from sparrow.types import Quaternion, Vector3
 
 logger = logging.getLogger("sparrow.ECS")
@@ -29,6 +29,8 @@ def _infer_dtype(comp_type: Type) -> np.dtype:
             AssetHandle[MeshData]: "O",
             Vector3: ("f4", (3,)),
             Quaternion: ("f4", (4,)),
+            Optional[AssetHandle[TextureData]]: ("f4", (4,)),
+            Tuple[float, float, float, float]: ("f4", (4,)),
         }
 
         for field in dataclasses.fields(comp_type):

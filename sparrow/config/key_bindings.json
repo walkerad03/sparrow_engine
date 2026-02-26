@@ -2,5 +2,7 @@
   "65": "move_left",
   "68": "move_right",
   "87": "move_forward",
-  "83": "move_backward"
+  "83": "move_backward",
+  "32": "move_up",
+  "67": "move_down"
 }

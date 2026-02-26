@@ -72,8 +72,8 @@ def extract_render_frame_system(world: World) -> None:
                         mesh_id=m_handles[i].id,
                         transform_index=transform_index,
                         albedo_id=None,
-                        color=(1.0, 0.5, 0.2, 1.0),
-                        roughness=0.5,
+                        color=(0.5, 0.5, 1.0, 1.0),
+                        roughness=0.05,
                         metallic=0.0,
                     )
                 )
