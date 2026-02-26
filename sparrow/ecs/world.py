@@ -11,7 +11,7 @@ import numpy as np
 from sparrow.assets import AssetHandle, MeshData
 from sparrow.types import Quaternion, Vector3
 
-logger = logging.getLogger("Sparrow.ECS")
+logger = logging.getLogger("sparrow.ECS")
 
 T = TypeVar("T")
 

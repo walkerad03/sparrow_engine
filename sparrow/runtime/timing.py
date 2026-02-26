@@ -2,14 +2,14 @@
 import time
 from dataclasses import dataclass
 
-import moderngl_window as mglw
+from moderngl_window.timers.base import BaseTimer
 
 
 @dataclass
 class FixedStep:
     target_ups: int
     target_fps: int
-    timer: mglw.timers.clock.Timer
+    timer: BaseTimer
     max_frame_time: float = 1.0
     max_steps_per_frame: int = 16
 

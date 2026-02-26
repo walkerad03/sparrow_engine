@@ -4,8 +4,10 @@ from typing import Any, Dict, List, Optional, Set
 import moderngl
 import moderngl_window as mglw
 from moderngl_window.conf import settings
+from moderngl_window.timers.base import BaseTimer
 
 from sparrow.input.events import KeyEvent, MouseClickEvent, MouseMoveEvent
+from sparrow.runtime.perf_timer import PerfCounterTimer
 
 
 class InterfaceManager:
@@ -43,7 +45,7 @@ class InterfaceManager:
         )
 
         self.wnd: mglw.BaseWindow = mglw.create_window_from_settings()
-        self.timer: mglw.Timer = mglw.timers.clock.Timer()
+        self.timer: BaseTimer = PerfCounterTimer()
         self.timer.start()
 
         self.ctx = self.wnd.ctx
