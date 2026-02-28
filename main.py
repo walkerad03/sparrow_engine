@@ -1,7 +1,7 @@
 # main.py
 import logging
 
-from game import GameScene
+from game import BlackHoleScene, GameScene
 from sparrow.debug import setup_logging
 from sparrow.runtime import Application, ApplicationConfig
 
@@ -18,7 +18,7 @@ def main():
         show_cursor=False,
     )
     app = Application(config)
-    scene = GameScene()
+    scene = BlackHoleScene()
 
     app.load_scene(scene)
     app.run()
