@@ -88,13 +88,24 @@ class ForwardPBRPass(RenderPass):
             "u_view_proj",
             pack_mat4(ctx.frame.camera.view_proj.T),
         )
+        set_uniform(program, "u_has_albedo_tex", 0)
 
         batches = self._batcher.group_objects(ctx.frame.objects)
 
-        for mesh_id, instances in batches.items():
+        for (mesh_id, albedo_id), instances in batches.items():
             gpu_mesh = ctx.gpu_resources.get_mesh(mesh_id)
             if not gpu_mesh:
                 continue
+
+            has_albedo_tex = 0
+            if albedo_id is not None:
+                gpu_tex = ctx.gpu_resources.get_texture(albedo_id)
+                if gpu_tex:
+                    gpu_tex.use(0)
+                    set_uniform(program, "u_albedo_tex", 0)
+                    has_albedo_tex = 1
+
+            set_uniform(program, "u_has_albedo_tex", has_albedo_tex)
 
             self._batcher.prepare_instance_data(instances, ctx.frame.transforms)
 

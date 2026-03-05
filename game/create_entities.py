@@ -27,7 +27,16 @@ def make_test_entity(world: World) -> int:
             scale=Vector3(x=rand_scale, y=rand_scale, z=rand_scale),
         ),
         Mesh(handle=mesh_handle),
-        Material(base_color=(random.uniform(0, 255), 1.0, 1.0, 1.0)),
+        Material(
+            base_color=(
+                random.uniform(0, 1),
+                random.uniform(0, 1),
+                random.uniform(0, 1),
+                1.0,
+            ),
+            metallic=0 if random.uniform(0, 1) > 0.5 else 1,
+            emissive=0 if random.uniform(0, 1) > 0.2 else 10,
+        ),
     )
 
     return eid

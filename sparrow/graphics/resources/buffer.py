@@ -61,7 +61,15 @@ class GPUMesh:
             (self.vbo, "3f 3f 2f", "in_pos", "in_normal", "in_uv"),
         ]
 
-        content.append((instance_buffer, "16f 4f /i", "i_model", "i_color"))
+        content.append(
+            (
+                instance_buffer,
+                "16f 4f 4f /i",
+                "i_model",
+                "i_base_color",
+                "i_material_params",
+            )
+        )
 
         vao = self._ctx.vertex_array(program, content, index_buffer=self.ibo)
         self._vaos[key] = vao

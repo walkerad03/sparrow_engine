@@ -36,6 +36,7 @@ class ObjectInstance:
     color: Color4
     roughness: Scalar
     metallic: Scalar
+    emissive: Scalar
 
 
 @dataclass(slots=True)

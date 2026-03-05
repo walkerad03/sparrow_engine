@@ -8,7 +8,9 @@ import numpy as np
 from sparrow.assets import AssetId
 from sparrow.graphics.integration import ObjectInstance
 
-INSTANCE_FLOAT_COUNT = 20
+BatchKey = tuple[AssetId, AssetId | None]
+
+INSTANCE_FLOAT_COUNT = 24
 INSTANCE_STRIDE = INSTANCE_FLOAT_COUNT * 4
 
 
@@ -31,11 +33,11 @@ class RenderBatcher:
 
     def group_objects(
         self, objects: List[ObjectInstance]
-    ) -> Dict[AssetId, List[ObjectInstance]]:
-        """Group a flat list of objects by their Mesh ID."""
+    ) -> Dict[BatchKey, List[ObjectInstance]]:
+        """Group a flat list of objects by Mesh ID and albedo texture."""
         batches = defaultdict(list)
         for obj in objects:
-            batches[obj.mesh_id].append(obj)
+            batches[(obj.mesh_id, obj.albedo_id)].append(obj)
         return batches
 
     def prepare_instance_data(
@@ -60,6 +62,11 @@ class RenderBatcher:
             self._cpu_buffer[i, 17] = obj.color[1]
             self._cpu_buffer[i, 18] = obj.color[2]
             self._cpu_buffer[i, 19] = obj.color[3]
+            # Material parameters
+            self._cpu_buffer[i, 20] = obj.roughness
+            self._cpu_buffer[i, 21] = obj.metallic
+            self._cpu_buffer[i, 22] = obj.emissive
+            self._cpu_buffer[i, 23] = 0.0
 
         if self.buffer is None:
             return

@@ -1,6 +1,6 @@
 # sparrow/graphics/integration/components.py
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from sparrow.assets.handle import AssetHandle
 from sparrow.assets.types import MeshData, TextureData
@@ -47,6 +47,12 @@ class Material:
     roughness: Scalar = 0.5
     metallic: Scalar = 0.0
     emissive: Scalar = 0.0
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(f"Invalid Material property: {key}")
 
 
 @dataclass(frozen=True)

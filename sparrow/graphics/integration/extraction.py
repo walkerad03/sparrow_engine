@@ -6,6 +6,7 @@ from sparrow.core.time import SimulationTime
 from sparrow.ecs.world import World
 from sparrow.graphics.integration.components import (
     DirectionalLight,
+    Material,
     Mesh,
 )
 from sparrow.graphics.integration.frame import (
@@ -18,6 +19,10 @@ from sparrow.types import EntityId, Vector3
 
 _FALLBACK_MAT = np.eye(4, dtype="f4")
 _FALLBACK_VEC = np.zeros(3, dtype="f4")
+_DEFAULT_BASE_COLOR = (1.0, 1.0, 1.0, 1.0)
+_DEFAULT_ROUGHNESS = 0.5
+_DEFAULT_METALLIC = 0.0
+_DEFAULT_EMISSIVE = 0.0
 
 
 def extract_render_frame_system(world: World) -> None:
@@ -66,15 +71,21 @@ def extract_render_frame_system(world: World) -> None:
                     scales[i],
                 )
 
+                entity_id = EntityId(eids[i])
+                albedo_id, color, roughness, metallic, emissive = (
+                    _extract_material_data(world, int(eids[i]))
+                )
+
                 objects.append(
                     ObjectInstance(
-                        entity_id=EntityId(eids[i]),
+                        entity_id=entity_id,
                         mesh_id=m_handles[i].id,
                         transform_index=transform_index,
-                        albedo_id=None,
-                        color=(0.5, 0.5, 1.0, 1.0),
-                        roughness=0.05,
-                        metallic=0.0,
+                        albedo_id=albedo_id,
+                        color=color,
+                        roughness=roughness,
+                        metallic=metallic,
+                        emissive=emissive,
                     )
                 )
                 transform_index += 1
@@ -159,3 +170,26 @@ def _extract_sun(world: World):
         return ((0.5, -0.8, 0.2), view.DirectionalLight.color[0])
 
     return ((0.5, -0.8, 0.2), (1.0, 1.0, 1.0))
+
+
+def _extract_material_data(world: World, entity_id: int):
+    material = world.comp_get(entity_id, Material)
+    if material is None:
+        return (
+            None,
+            _DEFAULT_BASE_COLOR,
+            _DEFAULT_ROUGHNESS,
+            _DEFAULT_METALLIC,
+            _DEFAULT_EMISSIVE,
+        )
+
+    albedo_handle = material["albedo"]
+    albedo_id = albedo_handle.id if hasattr(albedo_handle, "id") else None
+
+    base_color = tuple(float(c) for c in material["base_color"])
+    assert len(base_color) == 4
+    roughness = float(material["roughness"])
+    metallic = float(material["metallic"])
+    emissive = float(material["emissive"])
+
+    return (albedo_id, base_color, roughness, metallic, emissive)
