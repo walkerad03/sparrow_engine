@@ -19,6 +19,8 @@ class DefaultTextures(StrEnum):
 class DefaultShaders(StrEnum):
     FORWARD_VS = "defaults/shaders/forward.vert"
     FORWARD_FS = "defaults/shaders/forward.frag"
+    FOG_VS = "defaults/shaders/fog.vert"
+    FOG_FS = "defaults/shaders/fog.frag"
     TONEMAP_VS = "defaults/shaders/tonemap.vert"
     TONEMAP_FS = "defaults/shaders/tonemap.frag"
 
