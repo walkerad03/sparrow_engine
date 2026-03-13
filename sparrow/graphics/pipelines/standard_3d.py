@@ -58,7 +58,7 @@ def build_standard_3d_pipeline(builder: RenderGraphBuilder) -> None:
         ClearPass(
             pass_id=PassId("clear_pass"),
             target=ResourceId("main_fbo"),
-            color=(0.1, 0.1, 0.1, 1.0),
+            color=(0.0, 0.0, 0.0, 1.0),
         )
     )
 

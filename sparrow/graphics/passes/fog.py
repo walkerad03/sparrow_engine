@@ -32,7 +32,7 @@ class FogPass(RenderPass):
     target: Optional[ResourceId]
 
     fog_color: Color3 = (0.55, 0.65, 0.75)
-    density: float = 0.01
+    density: float = 0.0
 
     _vs_handle: AssetHandle | None = None
     _fs_handle: AssetHandle | None = None

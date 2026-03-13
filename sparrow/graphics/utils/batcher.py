@@ -40,6 +40,40 @@ class RenderBatcher:
             batches[(obj.mesh_id, obj.albedo_id)].append(obj)
         return batches
 
+    def group_columns(
+        self,
+        mesh_ids: np.ndarray,
+        albedo_ids: np.ndarray,
+    ) -> Dict[BatchKey, np.ndarray]:
+        """Group columnar mesh/albedo arrays and return index slices per batch."""
+        if mesh_ids.size == 0:
+            return {}
+
+        order = np.lexsort((albedo_ids, mesh_ids))
+        mesh_sorted = mesh_ids[order]
+        albedo_sorted = albedo_ids[order]
+
+        split_at = (
+            np.flatnonzero(
+                (mesh_sorted[1:] != mesh_sorted[:-1])
+                | (albedo_sorted[1:] != albedo_sorted[:-1])
+            )
+            + 1
+        )
+        starts = np.concatenate((np.array([0], dtype=np.int64), split_at))
+        ends = np.concatenate(
+            (split_at, np.array([order.size], dtype=np.int64))
+        )
+
+        batches: Dict[BatchKey, np.ndarray] = {}
+        for start, end in zip(starts.tolist(), ends.tolist()):
+            mesh_id = int(mesh_sorted[start])
+            albedo_raw = int(albedo_sorted[start])
+            albedo_id = None if albedo_raw < 0 else albedo_raw
+            batches[(mesh_id, albedo_id)] = order[start:end]
+
+        return batches
+
     def prepare_instance_data(
         self, instances: List[ObjectInstance], transforms: np.ndarray
     ) -> None:
@@ -67,6 +101,37 @@ class RenderBatcher:
             self._cpu_buffer[i, 21] = obj.metallic
             self._cpu_buffer[i, 22] = obj.emissive
             self._cpu_buffer[i, 23] = 0.0
+
+        if self.buffer is None:
+            return
+
+        data_view = self._cpu_buffer[:count]
+        self.buffer.write(data_view.tobytes())
+
+    def prepare_instance_data_columns(
+        self,
+        indices: np.ndarray,
+        transforms: np.ndarray,
+        colors: np.ndarray,
+        roughness: np.ndarray,
+        metallic: np.ndarray,
+        emissive: np.ndarray,
+    ) -> None:
+        count = int(indices.size)
+        if count == 0:
+            return
+
+        if count > self.capacity:
+            self._resize(count)
+
+        self._cpu_buffer[:count, 0:16] = (
+            transforms[indices].transpose(0, 2, 1).reshape(count, 16)
+        )
+        self._cpu_buffer[:count, 16:20] = colors[indices]
+        self._cpu_buffer[:count, 20] = roughness[indices]
+        self._cpu_buffer[:count, 21] = metallic[indices]
+        self._cpu_buffer[:count, 22] = emissive[indices]
+        self._cpu_buffer[:count, 23] = 0.0
 
         if self.buffer is None:
             return

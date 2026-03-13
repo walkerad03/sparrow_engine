@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 from typing import Any, Optional
 
+import numpy as np
+
 from sparrow.assets.handle import AssetHandle
 from sparrow.assets.types import MeshData, TextureData
 from sparrow.types import Color3, Color4, Scalar
@@ -15,15 +17,22 @@ class Mesh:
 
     __soa_dtype__ = [
         ("handle", "O"),
+        ("mesh_id", "i8"),
         ("visible", "?"),
         ("cast_shadows", "?"),
         ("render_layer", "i4"),
     ]
+    dtype = np.dtype(__soa_dtype__)
 
     handle: AssetHandle[MeshData]
+    mesh_id: int = -1
     visible: bool = True
     cast_shadows: bool = True
     render_layer: int = 0  # Optional for custom sorting
+
+    def __post_init__(self) -> None:
+        if hasattr(self.handle, "id"):
+            object.__setattr__(self, "mesh_id", int(self.handle.id))
 
 
 @dataclass(frozen=True)

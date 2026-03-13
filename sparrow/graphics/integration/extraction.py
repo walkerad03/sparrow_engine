@@ -12,10 +12,9 @@ from sparrow.graphics.integration.components import (
 from sparrow.graphics.integration.frame import (
     CameraData,
     CameraOutput,
-    ObjectInstance,
     RenderFrame,
 )
-from sparrow.types import EntityId, Vector3
+from sparrow.types import Vector3
 
 _FALLBACK_MAT = np.eye(4, dtype="f4")
 _FALLBACK_VEC = np.zeros(3, dtype="f4")
@@ -42,58 +41,76 @@ def extract_render_frame_system(world: World) -> None:
 
     objects = []
     transforms = np.empty((0, 4, 4), dtype="f4")
+    mesh_ids = np.empty(0, dtype=np.int64)
+    albedo_ids = np.empty(0, dtype=np.int64)
+    colors = np.empty((0, 4), dtype="f4")
+    roughness = np.empty(0, dtype="f4")
+    metallic = np.empty(0, dtype="f4")
+    emissive = np.empty(0, dtype="f4")
 
     view = world.query(Transform, Mesh)
     if len(view) > 0:
         m_vis = view.Mesh.visible
-        total_visible = int(m_vis.sum())
+        visible_indices = np.flatnonzero(m_vis)
+        total_visible = int(visible_indices.size)
 
         if total_visible > 0:
-            transforms = np.empty((total_visible, 4, 4), dtype="f4")
-            transform_index = 0
-
             positions = view.Transform.pos
             rotations = view.Transform.rot
             scales = view.Transform.scale
-
-            m_handles = view.Mesh.handle
-
+            m_ids = view.Mesh.mesh_id
             eids = view._indices
 
-            for i in range(len(view)):
-                if not m_vis[i]:
-                    continue
+            vis_pos = positions[visible_indices]
+            vis_rot = rotations[visible_indices]
+            vis_scale = scales[visible_indices]
+            vis_eids = eids[visible_indices]
 
-                _write_model_matrix(
-                    transforms[transform_index],
-                    positions[i],
-                    rotations[i],
-                    scales[i],
-                )
+            transforms = _write_model_matrices(vis_pos, vis_rot, vis_scale)
+            # Keep old field for compatibility; new hot path uses columnar fields.
+            objects = []
 
-                entity_id = EntityId(eids[i])
-                albedo_id, color, roughness, metallic, emissive = (
-                    _extract_material_data(world, int(eids[i]))
-                )
+            mesh_ids = m_ids[visible_indices].astype(np.int64, copy=False)
+            albedo_ids = np.full(total_visible, -1, dtype=np.int64)
+            colors = np.empty((total_visible, 4), dtype="f4")
+            colors[:, :] = _DEFAULT_BASE_COLOR
+            roughness = np.full(total_visible, _DEFAULT_ROUGHNESS, dtype="f4")
+            metallic = np.full(total_visible, _DEFAULT_METALLIC, dtype="f4")
+            emissive = np.full(total_visible, _DEFAULT_EMISSIVE, dtype="f4")
 
-                objects.append(
-                    ObjectInstance(
-                        entity_id=entity_id,
-                        mesh_id=m_handles[i].id,
-                        transform_index=transform_index,
-                        albedo_id=albedo_id,
-                        color=color,
-                        roughness=roughness,
-                        metallic=metallic,
-                        emissive=emissive,
-                    )
-                )
-                transform_index += 1
+            mat_comp_id = world._component_registry.get(Material)
+            if mat_comp_id is not None:
+                mat_mask = np.uint64(mat_comp_id)
+                has_material = (world._masks[vis_eids] & mat_mask) == mat_mask
+
+                if has_material.any():
+                    slots = np.flatnonzero(has_material)
+                    rows = world._component_arrays[mat_comp_id][
+                        vis_eids[has_material]
+                    ]
+                    colors[slots] = rows["base_color"]
+                    roughness[slots] = rows["roughness"]
+                    metallic[slots] = rows["metallic"]
+                    emissive[slots] = rows["emissive"]
+
+                    albedo_col = rows["albedo"]
+                    # Fast path: current ECS layout stores albedo as float4, not handles.
+                    # In that case, keep default -1 and avoid per-item Python work.
+                    if albedo_col.dtype == np.object_:
+                        for slot, handle in zip(slots, albedo_col):
+                            if handle is not None:
+                                albedo_ids[slot] = handle.id
 
     frame = RenderFrame(
         camera=camera_data,
         objects=objects,
         transforms=transforms,
+        mesh_ids=mesh_ids,
+        albedo_ids=albedo_ids,
+        colors=colors,
+        roughness=roughness,
+        metallic=metallic,
+        emissive=emissive,
         sun_direction=Vector3(sun_dir[0], sun_dir[1], sun_dir[2]),
         sun_color=sun_col,
         time=time_s,
@@ -151,6 +168,64 @@ def _write_model_matrix(out: np.ndarray, pos, rot, scale) -> None:
     out[3, 3] = 1.0
 
 
+def _write_model_matrices(
+    positions: np.ndarray,
+    rotations: np.ndarray,
+    scales: np.ndarray,
+) -> np.ndarray:
+    count = positions.shape[0]
+    out = np.zeros((count, 4, 4), dtype="f4")
+    if count == 0:
+        return out
+
+    x = rotations[:, 0]
+    y = rotations[:, 1]
+    z = rotations[:, 2]
+    w = rotations[:, 3]
+
+    n = np.sqrt(x * x + y * y + z * z + w * w)
+    safe = n > 0.0
+    inv = np.zeros_like(n)
+    inv[safe] = 1.0 / n[safe]
+
+    x = np.where(safe, x * inv, 0.0)
+    y = np.where(safe, y * inv, 0.0)
+    z = np.where(safe, z * inv, 0.0)
+    w = np.where(safe, w * inv, 1.0)
+
+    xx = x * x
+    yy = y * y
+    zz = z * z
+    xy = x * y
+    xz = x * z
+    yz = y * z
+    wx = w * x
+    wy = w * y
+    wz = w * z
+
+    sx = scales[:, 0]
+    sy = scales[:, 1]
+    sz = scales[:, 2]
+
+    out[:, 0, 0] = (1.0 - 2.0 * (yy + zz)) * sx
+    out[:, 0, 1] = (2.0 * (xy - wz)) * sy
+    out[:, 0, 2] = (2.0 * (xz + wy)) * sz
+    out[:, 0, 3] = positions[:, 0]
+
+    out[:, 1, 0] = (2.0 * (xy + wz)) * sx
+    out[:, 1, 1] = (1.0 - 2.0 * (xx + zz)) * sy
+    out[:, 1, 2] = (2.0 * (yz - wx)) * sz
+    out[:, 1, 3] = positions[:, 1]
+
+    out[:, 2, 0] = (2.0 * (xz - wy)) * sx
+    out[:, 2, 1] = (2.0 * (yz + wx)) * sy
+    out[:, 2, 2] = (1.0 - 2.0 * (xx + yy)) * sz
+    out[:, 2, 3] = positions[:, 2]
+
+    out[:, 3, 3] = 1.0
+    return out
+
+
 def _extract_prepared_camera(world: World) -> CameraData:
     camera_out = world.res_get(CameraOutput)
     if camera_out:
@@ -170,26 +245,3 @@ def _extract_sun(world: World):
         return ((0.5, -0.8, 0.2), view.DirectionalLight.color[0])
 
     return ((0.5, -0.8, 0.2), (1.0, 1.0, 1.0))
-
-
-def _extract_material_data(world: World, entity_id: int):
-    material = world.comp_get(entity_id, Material)
-    if material is None:
-        return (
-            None,
-            _DEFAULT_BASE_COLOR,
-            _DEFAULT_ROUGHNESS,
-            _DEFAULT_METALLIC,
-            _DEFAULT_EMISSIVE,
-        )
-
-    albedo_handle = material["albedo"]
-    albedo_id = albedo_handle.id if hasattr(albedo_handle, "id") else None
-
-    base_color = tuple(float(c) for c in material["base_color"])
-    assert len(base_color) == 4
-    roughness = float(material["roughness"])
-    metallic = float(material["metallic"])
-    emissive = float(material["emissive"])
-
-    return (albedo_id, base_color, roughness, metallic, emissive)

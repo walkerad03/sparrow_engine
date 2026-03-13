@@ -90,24 +90,58 @@ class ForwardPBRPass(RenderPass):
         )
         set_uniform(program, "u_has_albedo_tex", 0)
 
-        batches = self._batcher.group_objects(ctx.frame.objects)
+        if ctx.frame.mesh_ids.size > 0:
+            batches = self._batcher.group_columns(
+                ctx.frame.mesh_ids, ctx.frame.albedo_ids
+            )
 
-        for (mesh_id, albedo_id), instances in batches.items():
-            gpu_mesh = ctx.gpu_resources.get_mesh(mesh_id)
-            if not gpu_mesh:
-                continue
+            for (mesh_id, albedo_id), indices in batches.items():
+                gpu_mesh = ctx.gpu_resources.get_mesh(mesh_id)
+                if not gpu_mesh:
+                    continue
 
-            has_albedo_tex = 0
-            if albedo_id is not None:
-                gpu_tex = ctx.gpu_resources.get_texture(albedo_id)
-                if gpu_tex:
-                    gpu_tex.use(0)
-                    set_uniform(program, "u_albedo_tex", 0)
-                    has_albedo_tex = 1
+                has_albedo_tex = 0
+                if albedo_id is not None:
+                    gpu_tex = ctx.gpu_resources.get_texture(albedo_id)
+                    if gpu_tex:
+                        gpu_tex.use(0)
+                        set_uniform(program, "u_albedo_tex", 0)
+                        has_albedo_tex = 1
 
-            set_uniform(program, "u_has_albedo_tex", has_albedo_tex)
+                set_uniform(program, "u_has_albedo_tex", has_albedo_tex)
 
-            self._batcher.prepare_instance_data(instances, ctx.frame.transforms)
+                self._batcher.prepare_instance_data_columns(
+                    indices,
+                    ctx.frame.transforms,
+                    ctx.frame.colors,
+                    ctx.frame.roughness,
+                    ctx.frame.metallic,
+                    ctx.frame.emissive,
+                )
 
-            vao = gpu_mesh.get_instanced_vao(program, self._batcher.buffer)
-            vao.render(instances=len(instances))
+                vao = gpu_mesh.get_instanced_vao(program, self._batcher.buffer)
+                vao.render(instances=int(indices.size))
+        else:
+            batches = self._batcher.group_objects(ctx.frame.objects)
+
+            for (mesh_id, albedo_id), instances in batches.items():
+                gpu_mesh = ctx.gpu_resources.get_mesh(mesh_id)
+                if not gpu_mesh:
+                    continue
+
+                has_albedo_tex = 0
+                if albedo_id is not None:
+                    gpu_tex = ctx.gpu_resources.get_texture(albedo_id)
+                    if gpu_tex:
+                        gpu_tex.use(0)
+                        set_uniform(program, "u_albedo_tex", 0)
+                        has_albedo_tex = 1
+
+                set_uniform(program, "u_has_albedo_tex", has_albedo_tex)
+
+                self._batcher.prepare_instance_data(
+                    instances, ctx.frame.transforms
+                )
+
+                vao = gpu_mesh.get_instanced_vao(program, self._batcher.buffer)
+                vao.render(instances=len(instances))

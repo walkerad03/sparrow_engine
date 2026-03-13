@@ -52,6 +52,24 @@ class RenderFrame:
     transforms: np.ndarray = field(
         default_factory=lambda: np.zeros((0, 4, 4), dtype="f4")
     )
+    mesh_ids: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.int64)
+    )
+    albedo_ids: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.int64)
+    )
+    colors: np.ndarray = field(
+        default_factory=lambda: np.zeros((0, 4), dtype="f4")
+    )
+    roughness: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype="f4")
+    )
+    metallic: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype="f4")
+    )
+    emissive: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype="f4")
+    )
 
     # Lighting info
     sun_direction: Vector3 = Vector3(0.0, -1.0, 0.0)
