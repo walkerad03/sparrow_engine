@@ -14,7 +14,7 @@ from sparrow.types import Quaternion
 
 @dataclass
 class FreeCamConfig:
-    move_speed: float = 8.0
+    move_speed: float = 10.0
     look_sensitivity: float = 0.0025  # radians per pixel
     max_pitch_radians: float = math.radians(89.0)
 
@@ -79,6 +79,7 @@ def freecam_system(world: World) -> None:
 
     forward = _forward_vector(state.yaw, state.pitch)
     right = _right_vector(state.yaw)
+    up = _up_vector(state.yaw, state.pitch)
 
     wish = np.zeros(3, dtype="f4")
 
@@ -90,6 +91,10 @@ def freecam_system(world: World) -> None:
         wish += right
     if input_state.is_action_pressed("move_left"):
         wish -= right
+    if input_state.is_action_pressed("move_up"):
+        wish += up
+    if input_state.is_action_pressed("move_down"):
+        wish -= up
 
     norm = float(np.linalg.norm(wish))
     if norm > 0.0:
@@ -167,6 +172,17 @@ def _right_vector(yaw: float) -> np.ndarray:
             math.cos(yaw),
             0.0,
             -math.sin(yaw),
+        ],
+        dtype="f4",
+    )
+
+
+def _up_vector(yaw: float, pitch: float) -> np.ndarray:
+    return np.array(
+        [
+            math.sin(yaw) * math.sin(pitch),
+            math.cos(pitch),
+            math.cos(yaw) * math.sin(pitch),
         ],
         dtype="f4",
     )
