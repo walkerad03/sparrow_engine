@@ -10,6 +10,7 @@ from sparrow.debug.profiler import profile
 from sparrow.ecs.world import World
 from sparrow.graphics.core.renderer import Renderer
 from sparrow.graphics.pipelines import build_standard_3d_pipeline
+from sparrow.physics.server import PhysicsServer
 from sparrow.runtime.managers import InterfaceManager, ResourceManager
 from sparrow.runtime.timing import FixedStep
 
@@ -70,10 +71,12 @@ class Application:
             target_fps=self.config.target_fps,
             max_frame_time=self.config.max_frame_time,
         )
+        self.physics = PhysicsServer()
 
         self.world.res_add(self.interface)
         self.world.res_add(self.resources)
         self.world.res_add(self.clock)
+        self.world.res_add(self.physics)
 
         # TODO: Move this into a system so that we can avoid unnecessary imports
         asset_root = Path(".") / "sparrow" / "assets"
@@ -147,3 +150,5 @@ class Application:
     def quit(self) -> None:
         """Signals the application loop to terminate."""
         self.running = False
+
+        self.physics.shutdown()

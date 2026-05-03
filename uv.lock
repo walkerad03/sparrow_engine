@@ -306,6 +306,12 @@ wheels = [
 ]
 
 [[package]]
+name = "pybullet"
+version = "3.2.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/95/b9a98cd4ed948d4f25a7d0b13cb0c1f87e58dc6d113be9e18940641eb25f/pybullet-3.2.7.tar.gz", hash = "sha256:042879db8d101ac7590dee475fc6aded508b85fe1273fdbbfde1d88bd200e14f", size = 80508379 }
+
+[[package]]
 name = "pyglet"
 version = "2.1.12"
 source = { registry = "https://pypi.org/simple" }
@@ -458,6 +464,7 @@ dependencies = [
     { name = "moderngl-window" },
     { name = "numpy" },
     { name = "pillow" },
+    { name = "pybullet" },
     { name = "pytest" },
     { name = "scipy" },
 ]
@@ -474,6 +481,7 @@ requires-dist = [
     { name = "moderngl-window", specifier = ">=3.1.1" },
     { name = "numpy", specifier = ">=2.4.0" },
     { name = "pillow", specifier = ">=12.1.0" },
+    { name = "pybullet", specifier = ">=3.2.7" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "scipy", specifier = ">=1.16.3" },
 ]

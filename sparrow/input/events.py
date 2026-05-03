@@ -22,3 +22,4 @@ class MouseClickEvent:
     x: int
     y: int
     button: int
+    action: int

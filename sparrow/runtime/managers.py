@@ -63,7 +63,9 @@ class InterfaceManager:
         """Hooks internal methods to window events for event harvesting."""
         self.wnd.key_event_func = self._on_key_event
         self.wnd.mouse_position_event_func = self._on_mouse_move
+        self.wnd.mouse_drag_event_func = self._on_mouse_move
         self.wnd.mouse_press_event_func = self._on_mouse_press
+        self.wnd.mouse_release_event_func = self._on_mouse_release
 
     def _on_key_event(self, key: Any, action: Any, modifiers: Any) -> None:
         """Internal callback for keyboard activity."""
@@ -75,7 +77,11 @@ class InterfaceManager:
 
     def _on_mouse_press(self, x: int, y: int, button: int) -> None:
         """Internal callback for mouse clicks."""
-        self._event_buffer.append(MouseClickEvent(x, y, button))
+        self._event_buffer.append(MouseClickEvent(x, y, button, action=1))
+
+    def _on_mouse_release(self, x: int, y: int, button: int) -> None:
+        """Internal callback for mouse releases."""
+        self._event_buffer.append(MouseClickEvent(x, y, button, action=0))
 
     def poll_events(self) -> List[Any]:
         """Harvests and returns all events since the last call.

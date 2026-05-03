@@ -20,6 +20,9 @@ def _infer_dtype(comp_type: Type) -> np.dtype:
     if hasattr(comp_type, "dtype"):
         return getattr(comp_type, "dtype")
 
+    if hasattr(comp_type, "__soa_dtype__"):
+        return np.dtype(getattr(comp_type, "__soa_dtype__"))
+
     if dataclasses.is_dataclass(comp_type):
         fields = []
         type_mapping: dict[Any, str | tuple[str, tuple[int, ...]]] = {
@@ -30,6 +33,7 @@ def _infer_dtype(comp_type: Type) -> np.dtype:
             Vector3: ("f4", (3,)),
             Quaternion: ("f4", (4,)),
             Optional[AssetHandle[TextureData]]: ("f4", (4,)),
+            Tuple[float, float, float]: ("f4", (3,)),
             Tuple[float, float, float, float]: ("f4", (4,)),
         }
 

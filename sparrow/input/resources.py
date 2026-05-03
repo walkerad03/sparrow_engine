@@ -7,9 +7,13 @@ class InputMap:
     """Resource: Maps raw hardware codes to semantic action names."""
 
     key_bindings: dict[int, str] = field(default_factory=dict)
+    mouse_bindings: dict[int, str] = field(default_factory=dict)
 
     def bind_key(self, key_code: int, action_name: str) -> None:
         self.key_bindings[key_code] = action_name
+
+    def bind_mouse(self, button_code: int, action_name: str) -> None:
+        self.mouse_bindings[button_code] = action_name
 
 
 @dataclass

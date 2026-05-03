@@ -4,5 +4,7 @@
   "87": "move_forward",
   "83": "move_backward",
   "32": "move_up",
-  "67": "move_down"
+  "67": "move_down",
+  "m1": "mouse_left_click",
+  "m2": "mouse_right_click"
 }

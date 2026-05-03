@@ -2,7 +2,7 @@
 import logging
 from pathlib import Path
 
-from game import GameScene
+from game import PhysicsTestScene
 from sparrow.debug import setup_logging
 from sparrow.debug.line import line_profile
 from sparrow.graphics.integration.extraction import extract_render_frame_system
@@ -26,7 +26,7 @@ def main():
         show_cursor=False,
     )
     app = Application(config)
-    scene = GameScene()
+    scene = PhysicsTestScene()
 
     app.load_scene(scene)
     app.run()
