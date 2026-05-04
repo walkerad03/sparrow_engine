@@ -5,6 +5,7 @@ import pybullet as p
 
 from game.freecam import freecam_system
 from game.input import SpawnCubeRequest, game_input_system
+from game.physics_grab import physics_grab_system
 from sparrow.assets import AssetServer, DefaultMeshes
 from sparrow.core import Scene, Stage, Transform
 from sparrow.ecs import World
@@ -16,6 +17,7 @@ from sparrow.graphics.integration import (
     Mesh,
 )
 from sparrow.graphics.pipelines.standard_3d import build_standard_3d_pipeline
+from sparrow.network.client import EngineNetworkClient
 from sparrow.physics.components import Collider, RigidBody
 from sparrow.types import SystemId, Vector3
 
@@ -40,6 +42,7 @@ class PhysicsTestScene(Scene):
             before=SystemId("input_system"),
         )
         self.scheduler.add_system(Stage.FIXED_UPDATE, freecam_system)
+        self.scheduler.add_system(Stage.FIXED_UPDATE, physics_grab_system)
         self.scheduler.add_system(Stage.FIXED_UPDATE, physics_test_spawn_system)
 
     def setup(self, world: World) -> None:
@@ -47,6 +50,10 @@ class PhysicsTestScene(Scene):
         if renderer:
             # Explicitly set the standard 3D pipeline
             renderer.set_pipeline(build_standard_3d_pipeline)
+
+        net_client = EngineNetworkClient(world=world)
+        net_client.connect_to("127.0.0.1", 5071)
+        world.res_add(net_client)
 
         super().setup(world)
 
@@ -100,7 +107,7 @@ def physics_test_spawn_system(world: World) -> None:
             ),
             Mesh(handle=cube_mesh),
             Material(base_color=(random_color()), roughness=0.2, metallic=0.5),
-            RigidBody(mass=1.0),
+            RigidBody(mass=100.0),
             Collider(shape_type=p.GEOM_BOX, extents=Vector3(1, 1, 1)),
         )
 
@@ -134,7 +141,7 @@ def create_physics_test_entities(world: World) -> None:
     world.comp_add(
         sun_eid,
         Transform(pos=Vector3(10, 20, 10)),
-        DirectionalLight(color=(244, 233, 155), intensity=1.0),
+        DirectionalLight(color=(244, 233, 155), intensity=10.0),
     )
 
     # Spawn initial camera

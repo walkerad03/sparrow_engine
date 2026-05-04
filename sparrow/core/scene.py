@@ -5,6 +5,11 @@ from sparrow.graphics.integration import extract_render_frame_system
 from sparrow.systems.camera import camera_prepare_system
 from sparrow.systems.graphics import graphics_system
 from sparrow.systems.input import input_system
+from sparrow.systems.network import (
+    network_pump_system,
+    network_sync_out_system,
+    process_network_events_system,
+)
 from sparrow.systems.physics import (
     physics_init_system,
     physics_step_system,
@@ -24,8 +29,30 @@ class Scene:
         self._register_default_systems()
 
     def _register_default_systems(self):
-        self.scheduler.add_system(Stage.FIXED_UPDATE, input_system)
-        self.scheduler.add_system(Stage.FIXED_UPDATE, simulation_time_system)
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            input_system,
+            name=SystemId("input"),
+        )
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            network_pump_system,
+            name=SystemId("network_pump"),
+            after=SystemId("input"),
+            before=SystemId("process_network_events"),
+        )
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            process_network_events_system,
+            name=SystemId("process_network_events_system"),
+            after=SystemId("network_pump"),
+            before=SystemId("simulation_time"),
+        )
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            simulation_time_system,
+            name=SystemId("simulation_time"),
+        )
 
         self.scheduler.add_system(
             Stage.FIXED_UPDATE,
@@ -55,6 +82,11 @@ class Scene:
             spatial_indexing_system,
             name=SystemId("spatial_indexing"),
             after=SystemId("translation"),
+        )
+        self.scheduler.add_system(
+            Stage.FIXED_UPDATE,
+            network_sync_out_system,
+            after=SystemId("spatial_indexing"),
         )
 
         self.scheduler.add_system(
