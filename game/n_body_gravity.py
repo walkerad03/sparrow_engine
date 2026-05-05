@@ -17,70 +17,52 @@ class GravityPointSource:
 
 
 def n_body_gravity_system(world: World) -> None:
-    """
-    Applies an N-body gravitational attraction between all entities tagged
-    with GravityPointSource.
-    """
     physics = world.res_get(PhysicsServer)
     if not physics:
         return
 
-    # Query for dynamic bodies with the GravityPointSource tag
     view = world.query(Transform, RigidBody, GravityPointSource)
     if len(view) < 2:
         return
 
-    positions = view.Transform.pos
-    masses = view.RigidBody.mass
-    body_ids = view.RigidBody.body_id
-    is_kinematic = view.RigidBody.is_kinematic
+    mask = (
+        (view.RigidBody.body_id != -1)
+        & (~view.RigidBody.is_kinematic)
+        & (view.RigidBody.mass > 0)
+    )
 
-    # Filter for active dynamic (non-kinematic) bodies with mass
-    indices = []
-    for i in range(len(view)):
-        if body_ids[i] != -1 and not is_kinematic[i] and masses[i] > 0:
-            indices.append(i)
+    active_ids = view.RigidBody.body_id[mask]
+    pos = view.Transform.pos[mask]  # Shape (N, 3)
+    masses = view.RigidBody.mass[mask]  # Shape (N,)
 
-    if len(indices) < 2:
+    num_bodies = len(active_ids)
+    if num_bodies < 2:
         return
 
-    # F = G * (m1 * m2) / r^2
+    diffs = pos[np.newaxis, :, :] - pos[:, np.newaxis, :]  # Shape (N, N, 3)
+
+    dist_sq = np.sum(diffs**2, axis=-1)  # Shape (N, N)
+
+    softening = 0.1
+    dist_sq += softening**2
+
+    mass_matrix = masses[:, np.newaxis] * masses[np.newaxis, :]
     GAME_G = 10.0
+    force_mag = (GAME_G * mass_matrix) / dist_sq  # Shape (N, N)
 
-    for i in range(len(indices)):
-        idx_a = indices[i]
-        pos_a = positions[idx_a]
-        m_a = masses[idx_a]
-        id_a = body_ids[idx_a]
+    inv_dist = 1.0 / np.sqrt(dist_sq)
+    force_vectors = (
+        diffs * (inv_dist * force_mag)[..., np.newaxis]
+    )  # Shape (N, N, 3)
 
-        total_force = np.zeros(3, dtype="f4")
+    total_forces = np.sum(force_vectors, axis=1)  # Shape (N, 3)
 
-        for j in range(len(indices)):
-            if i == j:
-                continue
-
-            idx_b = indices[j]
-            pos_b = positions[idx_b]
-            m_b = masses[idx_b]
-
-            # Vector from A to B
-            diff = pos_b - pos_a
-            dist_sq = np.dot(diff, diff)
-
-            if dist_sq < 0.1:  # Softening
-                continue
-
-            dist = np.sqrt(dist_sq)
-            force_mag = (GAME_G * m_a * m_b) / dist_sq
-            force_vec = (diff / dist) * force_mag
-            total_force += force_vec
-
-        # Apply the cumulative force to the PyBullet body
+    for i in range(num_bodies):
         p.applyExternalForce(
-            id_a,
+            int(active_ids[i]),
             -1,
-            forceObj=tuple(total_force),
-            posObj=tuple(pos_a),
+            forceObj=total_forces[i],
+            posObj=pos[i],
             flags=p.WORLD_FRAME,
             physicsClientId=physics.client_id,
         )
