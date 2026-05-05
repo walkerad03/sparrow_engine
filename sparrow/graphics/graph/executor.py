@@ -84,6 +84,8 @@ class GraphExecutor:
             # TODO: handle MSAA and dtype parsing here.
             if desc.is_depth:
                 tex = self.ctx.depth_texture((w, h))
+                tex.repeat_x = False
+                tex.repeat_y = False
             else:
                 tex = self.ctx.texture(
                     (w, h), desc.components, dtype=desc.dtype

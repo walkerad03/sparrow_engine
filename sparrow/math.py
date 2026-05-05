@@ -276,3 +276,74 @@ def create_perspective_projection(
     mat[3, 2] = -1.0
 
     return mat
+
+
+def create_ortho_projection(
+    left: float,
+    right: float,
+    bottom: float,
+    top: float,
+    near: float,
+    far: float,
+) -> np.ndarray:
+    """
+    Creates an Orthographic Projection Matrix.
+    """
+    mat = np.zeros((4, 4), dtype=np.float32)
+
+    mat[0, 0] = 2.0 / (right - left)
+    mat[0, 3] = -(right + left) / (right - left)
+
+    mat[1, 1] = 2.0 / (top - bottom)
+    mat[1, 3] = -(top + bottom) / (top - bottom)
+
+    mat[2, 2] = -2.0 / (far - near)
+    mat[2, 3] = -(far + near) / (far - near)
+
+    mat[3, 3] = 1.0
+
+    return mat
+
+
+def create_look_at(
+    eye: Union[Vector3, np.ndarray],
+    target: Union[Vector3, np.ndarray],
+    up: Union[Vector3, np.ndarray] = (0.0, 1.0, 0.0),
+) -> np.ndarray:
+    """
+    Creates a View Matrix looking from 'eye' to 'target'.
+    """
+    eye = np.array(eye, dtype=np.float32)
+    target = np.array(target, dtype=np.float32)
+    up = np.array(up, dtype=np.float32)
+
+    # z-axis: from target to eye (Right-handed OpenGL)
+    z = eye - target
+    z_norm = np.linalg.norm(z)
+    if z_norm < 1e-6:
+        z = np.array([0, 0, 1], dtype=np.float32)
+    else:
+        z /= z_norm
+
+    # x-axis: cross(up, z)
+    x = np.cross(up, z)
+    x_norm = np.linalg.norm(x)
+    if x_norm < 1e-6:
+        # Singular case (looking straight up or down)
+        x = np.array([1, 0, 0], dtype=np.float32)
+    else:
+        x /= x_norm
+
+    # y-axis: cross(z, x)
+    y = np.cross(z, x)
+
+    mat = np.eye(4, dtype=np.float32)
+    mat[0, :3] = x
+    mat[1, :3] = y
+    mat[2, :3] = z
+
+    mat[0, 3] = -np.dot(x, eye)
+    mat[1, 3] = -np.dot(y, eye)
+    mat[2, 3] = -np.dot(z, eye)
+
+    return mat

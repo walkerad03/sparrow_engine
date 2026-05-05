@@ -7,6 +7,7 @@ from sparrow.types import Vector3
 class RigidBody:
     body_id: int = -1
     mass: float = 1.0
+    is_kinematic: bool = False
 
 
 @dataclass

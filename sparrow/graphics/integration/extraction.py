@@ -241,7 +241,25 @@ def _extract_sun(world: World):
     view = world.query(DirectionalLight, Transform)
 
     if len(view) > 0:
-        # Just take the first light
-        return ((0.5, -0.8, 0.2), view.DirectionalLight.color[0])
+        # Calculate forward vector from the light's rotation
+        rot = view.Transform.rot[0]
+
+        # v' = v + 2 * q_vec x (q_vec x v + q_w * v)
+        v = np.array([0, 0, -1], dtype="f4")
+        q_vec = np.array([rot[0], rot[1], rot[2]], dtype="f4")
+        q_w = rot[3]
+        uv = np.cross(q_vec, v)
+        uuv = np.cross(q_vec, uv)
+        forward = v + 2 * (q_w * uv + uuv)
+
+        intensity = view.DirectionalLight.intensity[0]
+        color = view.DirectionalLight.color[0]
+        final_color = (
+            color[0] * intensity,
+            color[1] * intensity,
+            color[2] * intensity,
+        )
+
+        return (tuple(forward), final_color)
 
     return ((0.5, -0.8, 0.2), (1.0, 1.0, 1.0))

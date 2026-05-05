@@ -26,6 +26,7 @@ def physics_init_system(world: World) -> None:
             pos = tuple(view.Transform.pos[i])
             rot = tuple(view.Transform.rot[i])
             mass = float(view.RigidBody.mass[i])
+            is_kinematic = bool(view.RigidBody.is_kinematic[i])
 
             extents = tuple(view.Collider.extents[i])
             shape_id = p.createCollisionShape(
@@ -35,12 +36,20 @@ def physics_init_system(world: World) -> None:
             )
 
             new_body_id = p.createMultiBody(
-                baseMass=mass,
+                baseMass=0.0 if is_kinematic else mass,
                 baseCollisionShapeIndex=shape_id,
                 basePosition=pos,
                 baseOrientation=rot,
                 physicsClientId=physics.client_id,
             )
+
+            if is_kinematic:
+                p.changeDynamics(
+                    new_body_id,
+                    -1,
+                    activationState=p.ACTIVATION_STATE_DISABLE_SLEEPING,
+                    physicsClientId=physics.client_id,
+                )
 
             body_ids[i] = new_body_id
             modified = True
@@ -55,6 +64,20 @@ def physics_step_system(world: World) -> None:
     sim_time = world.res_get(SimulationTime)
 
     if physics and sim_time:
+        # Before stepping, sync Kinematic bodies FROM ECS TO Bullet
+        view = world.query(Transform, RigidBody)
+        for i in range(len(view)):
+            if (
+                view.RigidBody.is_kinematic[i]
+                and view.RigidBody.body_id[i] != -1
+            ):
+                p.resetBasePositionAndOrientation(
+                    view.RigidBody.body_id[i],
+                    tuple(view.Transform.pos[i]),
+                    tuple(view.Transform.rot[i]),
+                    physicsClientId=physics.client_id,
+                )
+
         physics.set_timestep(sim_time.fixed_dt)
         physics.step()
 
@@ -71,12 +94,14 @@ def physics_sync_system(world: World) -> None:
 
     # Get local copies of the entire arrays
     body_ids = view.RigidBody.body_id
+    is_kinematic = view.RigidBody.is_kinematic
     positions = view.Transform.pos.copy()
     rotations = view.Transform.rot.copy()
 
+    modified = False
     for i in range(len(view)):
         body_id = body_ids[i]
-        if body_id == -1:
+        if body_id == -1 or is_kinematic[i]:
             continue
 
         pos, rot = p.getBasePositionAndOrientation(
@@ -85,7 +110,9 @@ def physics_sync_system(world: World) -> None:
 
         positions[i] = pos
         rotations[i] = rot
+        modified = True
 
     # Explicitly write back to the ECS proxies
-    view.Transform.pos = positions
-    view.Transform.rot = rotations
+    if modified:
+        view.Transform.pos = positions
+        view.Transform.rot = rotations

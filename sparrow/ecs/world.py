@@ -45,9 +45,11 @@ def _infer_dtype(comp_type: Type) -> np.dtype:
                 )
             fields.append((field.name, np_type))
 
-        if fields:
-            logger.info(f"inferred dtype for {comp_type.__name__}: {fields}")
-            return np.dtype(fields)
+        if not fields:
+            return np.dtype("i1")
+
+        logger.info(f"inferred dtype for {comp_type.__name__}: {fields}")
+        return np.dtype(fields)
 
     raise TypeError(f"{comp_type.__name__} must be a dataclass")
 
@@ -251,7 +253,10 @@ class World:
 
                     arr[name][entity_id] = val
         else:
-            arr[entity_id] = comp
+            if arr.dtype == np.dtype("i1"):
+                arr[entity_id] = 1
+            else:
+                arr[entity_id] = comp
 
     def _register_component(self, component_type: Type) -> int:
         """Registers a component type and allocates its SoA buffer.

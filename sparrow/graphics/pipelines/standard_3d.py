@@ -5,14 +5,33 @@ from sparrow.graphics.graph.builder import RenderGraphBuilder
 from sparrow.graphics.passes.clear import ClearPass
 from sparrow.graphics.passes.fog import FogPass
 from sparrow.graphics.passes.forward import ForwardPBRPass
+from sparrow.graphics.passes.shadow import ShadowPass
 from sparrow.graphics.passes.tonemap import TonemapPass
 from sparrow.graphics.utils.ids import PassId, ResourceId
 
 
 def build_standard_3d_pipeline(builder: RenderGraphBuilder) -> None:
     """
-    Constructs a basic Forward PBR pipeline.
+    Constructs a basic Forward PBR pipeline with shadows.
     """
+
+    builder.define_texture(
+        ResourceId("shadow_map"),
+        desc=TextureDesc(
+            size=(4096, 4096),
+            components=1,
+            dtype="f4",
+            is_depth=True,
+        ),
+    )
+
+    builder.define_framebuffer(
+        ResourceId("shadow_fbo"),
+        FramebufferDesc(
+            color_attachments=[],
+            depth_attachment=ResourceId("shadow_map"),
+        ),
+    )
 
     builder.define_texture(
         ResourceId("hdr_color"),
@@ -63,9 +82,25 @@ def build_standard_3d_pipeline(builder: RenderGraphBuilder) -> None:
     )
 
     builder.add_pass(
+        ClearPass(
+            pass_id=PassId("clear_shadow"),
+            target=ResourceId("shadow_fbo"),
+            depth=1.0,
+        )
+    )
+
+    builder.add_pass(
+        ShadowPass(
+            pass_id=PassId("shadow_pass"),
+            target=ResourceId("shadow_fbo"),
+        )
+    )
+
+    builder.add_pass(
         ForwardPBRPass(
             pass_id=PassId("forward_pass"),
             target=ResourceId("main_fbo"),
+            shadow_map=ResourceId("shadow_map"),
         )
     )
 

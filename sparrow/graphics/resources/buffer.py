@@ -38,7 +38,10 @@ class GPUMesh:
         if key in self._vaos:
             return self._vaos[key]
 
-        content = [(self.vbo, "3f 3f 2f", "in_pos", "in_normal", "in_uv")]
+        content = self._build_content(
+            program,
+            (self.vbo, "3f 3f 2f", "in_pos", "in_normal", "in_uv"),
+        )
         vao = self._ctx.vertex_array(program, content, index_buffer=self.ibo)
 
         self._vaos[key] = vao
@@ -56,24 +59,56 @@ class GPUMesh:
         if key in self._vaos:
             return self._vaos[key]
 
-        # TODO: In the future, pass these attribute names in dynamically if needed
-        content = [
+        content = self._build_content(
+            program,
             (self.vbo, "3f 3f 2f", "in_pos", "in_normal", "in_uv"),
-        ]
-
-        content.append(
             (
                 instance_buffer,
                 "16f 4f 4f /i",
                 "i_model",
                 "i_base_color",
                 "i_material_params",
-            )
+            ),
         )
 
         vao = self._ctx.vertex_array(program, content, index_buffer=self.ibo)
         self._vaos[key] = vao
         return vao
+
+    def _build_content(self, program: moderngl.Program, *buffers_info):
+        """
+        Filters attributes and creates the ModernGL 'content' list.
+        Handles padding for missing attributes.
+        """
+        final_content = []
+
+        for buf, layout, *attribs in buffers_info:
+            parts = layout.split()
+            instanced = False
+            if parts[-1] == "/i":
+                instanced = True
+                parts = parts[:-1]
+
+            actual_parts = []
+            actual_attribs = []
+
+            for i, part in enumerate(parts):
+                name = attribs[i]
+                if name in program:
+                    actual_parts.append(part)
+                    actual_attribs.append(name)
+                else:
+                    # Convert to padding. e.g. "3f" -> "12x"
+                    count = int(part[:-1])
+                    actual_parts.append(f"{count * 4}x")
+
+            if actual_attribs:
+                fmt = " ".join(actual_parts)
+                if instanced:
+                    fmt += " /i"
+                final_content.append((buf, fmt, *actual_attribs))
+
+        return final_content
 
     def release(self) -> None:
         self.vbo.release()

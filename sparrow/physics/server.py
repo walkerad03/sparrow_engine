@@ -30,6 +30,12 @@ class PhysicsServer:
     def set_timestep(self, dt: float) -> None:
         p.setTimeStep(dt, physicsClientId=self.client_id)
 
+    def set_gravity(self, gravity: Vector3) -> None:
+        """Sets the global gravity vector for the simulation."""
+        p.setGravity(
+            gravity.x, gravity.y, gravity.z, physicsClientId=self.client_id
+        )
+
     def step(self) -> None:
         p.stepSimulation(physicsClientId=self.client_id)
 

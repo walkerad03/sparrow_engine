@@ -5,6 +5,7 @@ import pybullet as p
 
 from game.freecam import freecam_system
 from game.input import SpawnCubeRequest, game_input_system
+from game.n_body_gravity import GravityPointSource, n_body_gravity_system
 from game.physics_grab import physics_grab_system
 from sparrow.assets import AssetServer, DefaultMeshes
 from sparrow.core import Scene, Stage, Transform
@@ -19,7 +20,7 @@ from sparrow.graphics.integration import (
 from sparrow.graphics.pipelines.standard_3d import build_standard_3d_pipeline
 from sparrow.network.client import EngineNetworkClient
 from sparrow.physics.components import Collider, RigidBody
-from sparrow.types import SystemId, Vector3
+from sparrow.types import Quaternion, SystemId, Vector3
 
 # Using DefaultMeshes enum for correct relative paths
 CUBE_MODEL_PATH = DefaultMeshes.CUBE
@@ -33,8 +34,6 @@ class PhysicsTestScene(Scene):
         # Setup entities
         self.scheduler.add_system(Stage.SETUP, create_physics_test_entities)
 
-        # Game-specific systems
-        # We run game_input_system BEFORE the engine's input_system to catch raw 'E' presses.
         self.scheduler.add_system(
             Stage.FIXED_UPDATE,
             game_input_system,
@@ -44,6 +43,7 @@ class PhysicsTestScene(Scene):
         self.scheduler.add_system(Stage.FIXED_UPDATE, freecam_system)
         self.scheduler.add_system(Stage.FIXED_UPDATE, physics_grab_system)
         self.scheduler.add_system(Stage.FIXED_UPDATE, physics_test_spawn_system)
+        self.scheduler.add_system(Stage.FIXED_UPDATE, n_body_gravity_system)
 
     def setup(self, world: World) -> None:
         renderer = world.res_get(Renderer)
@@ -102,13 +102,23 @@ def physics_test_spawn_system(world: World) -> None:
         world.comp_add(
             eid,
             Transform(
-                pos=Vector3(spawn_pos[0], spawn_pos[1], spawn_pos[2]),
+                pos=Vector3(
+                    spawn_pos[0] + random.uniform(-0.05, 0.05),
+                    spawn_pos[1] + random.uniform(-0.05, 0.05),
+                    spawn_pos[2] + random.uniform(-0.05, 0.05),
+                ),
+                rot=cam_rot,
                 scale=Vector3(1.0, 1.0, 1.0),
             ),
             Mesh(handle=cube_mesh),
-            Material(base_color=(random_color()), roughness=0.2, metallic=0.5),
-            RigidBody(mass=100.0),
+            Material(
+                base_color=(random_color()),
+                roughness=0.2,
+                metallic=random.uniform(0, 1),
+            ),
+            RigidBody(mass=10.0),
             Collider(shape_type=p.GEOM_BOX, extents=Vector3(1, 1, 1)),
+            GravityPointSource(),
         )
 
 
@@ -131,17 +141,23 @@ def create_physics_test_entities(world: World) -> None:
             pos=Vector3(0.0, -2.0, 0.0), scale=Vector3(100.0, 1.0, 100.0)
         ),
         Mesh(handle=plane_mesh),
-        Material(base_color=(0.2, 0.2, 0.2, 1.0), roughness=0.8),
+        Material(base_color=(0.5, 0.5, 0.5, 1.0), roughness=0.1),
         RigidBody(mass=0.0),  # mass 0 = static in PyBullet
-        Collider(shape_type=p.GEOM_BOX, extents=Vector3(50.0, 0.1, 50.0)),
+        Collider(shape_type=p.GEOM_BOX, extents=Vector3(100.0, 0.1, 100.0)),
     )
 
     # Add a light so things aren't just ambiently lit
     sun_eid = world.entity_add()
+    sun_rot = Quaternion.from_euler(
+        pitch=np.radians(60.0), yaw=np.radians(45.0), roll=0.0
+    )
     world.comp_add(
         sun_eid,
-        Transform(pos=Vector3(10, 20, 10)),
-        DirectionalLight(color=(244, 233, 155), intensity=10.0),
+        Transform(
+            pos=Vector3(10, 20, 10),
+            rot=sun_rot,
+        ),
+        DirectionalLight(color=(0.95, 0.91, 0.6), intensity=2.0),
     )
 
     # Spawn initial camera
@@ -150,4 +166,6 @@ def create_physics_test_entities(world: World) -> None:
         cam,
         Transform(pos=Vector3(0.0, 10.0, 30.0)),
         Camera(active=True, far=1000.0),
+        RigidBody(mass=1.0, is_kinematic=True),
+        Collider(shape_type=p.GEOM_BOX, extents=Vector3(1, 1, 1)),
     )

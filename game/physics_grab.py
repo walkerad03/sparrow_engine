@@ -79,7 +79,7 @@ def physics_grab_system(world: World) -> None:
             grab_state.hold_distance = (dx**2 + dy**2 + dz**2) ** 0.5
 
             grab_state.constraint_id = physics.create_world_tether(
-                hit.body_id, hit.hit_pos, max_force=150.0, erp=0.03
+                hit.body_id, hit.hit_pos, max_force=150.0, erp=0.1
             )
             grab_state.is_grabbing = True
             grab_state.body_id = hit.body_id
